@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{admin/layout :: page(
+            ${course.id != null} ? 'Sửa khóa học' : 'Thêm khóa học',
+            'Thông tin hiển thị ngoài trang chủ và trang chi tiết khóa học', 'course', ~{::main})}">
+<body>
+<main>
+
+    <div class="card">
+        <div class="card__head">
+            <h2 th:text="${course.id != null} ? 'Cập nhật khóa học' : 'Khóa học mới'">Thông tin</h2>
+            <span class="cell-sub" th:if="${course.id != null}"
+                  th:text="'Đánh giá ' + ${course.rating} + '★ · ' + ${course.studentCount} + ' học viên'"></span>
+        </div>
+
+        <div class="card__body">
+            <!-- enctype bắt buộc phải có, thiếu là trình duyệt chỉ gửi TÊN file
+                 chứ không gửi nội dung, và ảnh sẽ không bao giờ lên tới server. -->
+            <form th:action="@{/admin/course/save}" th:object="${course}" method="post"
+                  enctype="multipart/form-data">
+                <input type="hidden" th:field="*{id}">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Tên khóa học</label>
+                        <input type="text" th:field="*{title}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Slug</label>
+                        <input type="text" th:field="*{slug}" required>
+                        <span class="hint">Dùng trong đường dẫn. Không được trùng.</span>
+                    </div>
+
+                    <div class="form-group form-group--full">
+                        <label>Mô tả ngắn</label>
+                        <input type="text" th:field="*{subtitle}" placeholder="React • Node.js • MongoDB">
+                    </div>
+
+                    <div class="form-group form-group--full">
+                        <label>Mô tả chi tiết</label>
+                        <textarea th:field="*{description}"></textarea>
+                    </div>
+
+                    <div class="form-group form-group--full">
+                        <label>Ảnh bìa khóa học</label>
+
+                        <div class="upload-row">
+                            <div class="upload-preview">
+                                <img id="anhXemTruoc" th:if="${course.thumbnailUrl}"
+                                     th:src="${course.thumbnailUrl}" alt="Ảnh hiện tại">
+                                <span id="anhTrong" th:unless="${course.thumbnailUrl}">Chưa có ảnh</span>
+                            </div>
+
+                            <div class="upload-fields">
+                                <input type="text" th:field="*{thumbnailUrl}"
+                                       placeholder="Dán đường dẫn ảnh, ví dụ https://...">
+                                <div class="upload-or">hoặc</div>
+                                <input type="file" name="thumbnailFile" accept="image/*"
+                                       onchange="xemTruocAnh(this)">
+                                <span class="hint">
+                                    Nhận jpg, png, webp, gif. Tối đa 5MB.
+                                    Chọn file thì file được ưu tiên, ghi đè ô đường dẫn ở trên.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group form-group--full">
+                        <label>Video giới thiệu (URL)</label>
+                        <input type="text" th:field="*{previewVideoUrl}">
+                    </div>
+
+                    <!-- KHÔNG dùng th:field cho hai select này.
+                         th:field so sánh value của option (chuỗi id, ví dụ "3") với giá trị
+                         của trường trong object — ở đây là cả một object Category. Category
+                         không override toString() nên phép so sánh không bao giờ đúng, không
+                         option nào được đánh dấu selected, và trình duyệt mặc định chọn mục
+                         ĐẦU TIÊN. Hậu quả: mở form sửa rồi bấm Lưu là khóa học bị gán nhầm
+                         sang danh mục/giảng viên đầu danh sách.
+                         Tự đặt name + th:selected thì so sánh id với id, đúng kiểu.
+                         Phần chuyển id -> object do @InitBinder trong AdminCourseController lo. -->
+                    <div class="form-group">
+                        <label>Danh mục</label>
+                        <select name="category">
+                            <option th:each="cat : ${categories}"
+                                    th:value="${cat.id}"
+                                    th:text="${tenDayDu != null} ? ${tenDayDu.get(cat.id)} : ${cat.name}"
+                                    th:selected="${course.category?.id == cat.id}">
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Giảng viên</label>
+                        <select name="instructor">
+                            <option th:each="ins : ${instructors}"
+                                    th:value="${ins.id}"
+                                    th:text="${ins.fullname}"
+                                    th:selected="${course.instructor?.id == ins.id}">
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Hiển thị</label>
+                        <select th:field="*{status}">
+                            <option value="active">Hiện ngoài trang khách</option>
+                            <option value="inactive">Ẩn — chỉ admin thấy</option>
+                        </select>
+                        <span class="hint">Khóa mới đồng bộ từ LMS về luôn ở trạng thái ẩn.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Cấp độ</label>
+                        <select th:field="*{level}">
+                            <option value="ALL">Mọi trình độ</option>
+                            <option value="BEGINNER">Cơ bản</option>
+                            <option value="INTERMEDIATE">Trung cấp</option>
+                            <option value="ADVANCED">Nâng cao</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Loại giá</label>
+                        <select th:field="*{priceType}">
+                            <option value="PAID">Trả phí</option>
+                            <option value="FREE">Miễn phí</option>
+                            <option value="CONTACT">Liên hệ</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Giá bán</label>
+                        <input type="number" th:field="*{price}" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Giá gốc</label>
+                        <input type="number" th:field="*{originalPrice}" min="0">
+                        <span class="hint">Hiển thị gạch ngang bên cạnh giá bán.</span>
+                    </div>
+
+                    <!-- Hai trường này trước đây không có trên form, nên không đặt được
+                         khóa Pro và không sửa được số bài học. -->
+                    <div class="form-group">
+                        <label>Khóa Pro</label>
+                        <select th:field="*{isPro}">
+                            <option value="0">Không</option>
+                            <option value="1">Có</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Số bài học</label>
+                        <input type="number" th:field="*{lessonCount}" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Thời lượng</label>
+                        <input type="text" th:field="*{durationText}" placeholder="6h18p">
+                    </div>
+
+                    <!-- Mắt xích nối khóa học bên này với khóa học bên LMS -->
+                    <div class="form-group form-group--full">
+                        <label>Khóa học tương ứng trên LMS</label>
+                        <input type="number" th:field="*{moodleCourseId}" min="1" placeholder="Ví dụ: 2">
+                        <span class="hint">
+                            Mở khóa học tương ứng trên lms.buni.vn rồi lấy con số trong đường dẫn:
+                            <code>/course/view.php?id=<b>2</b></code><br>
+                            Để trống nếu khóa chưa mở trên LMS — ngoài trang khóa học sẽ hiện
+                            "Sắp khai giảng" thay cho nút Đăng ký học.
+                        </span>
+                    </div>
+                </div>
+
+                <!-- rating, ratingCount, studentCount cố ý KHÔNG đưa lên form: đó là số
+                     liệu tích lũy, không phải thứ gõ tay. CourseService.save() giữ nguyên
+                     chúng khi cập nhật. -->
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn--primary">Lưu</button>
+                    <a th:href="@{/admin/course}" class="btn btn--ghost">Hủy</a>
+                </div>
+            </form>
+
+            <script>
+                // Xem trước ảnh ngay trên trình duyệt, chưa gửi gì lên server.
+                function xemTruocAnh(input) {
+                    var file = input.files && input.files[0];
+                    if (!file) return;
+
+                    var img = document.getElementById('anhXemTruoc');
+                    var trong = document.getElementById('anhTrong');
+
+                    if (!img) {
+                        img = document.createElement('img');
+                        img.id = 'anhXemTruoc';
+                        input.closest('.upload-row').querySelector('.upload-preview').appendChild(img);
+                    }
+                    if (trong) trong.remove();
+
+                    img.src = URL.createObjectURL(file);
+                }
+            </script>
+        </div>
+    </div>
+
+</main>
+</body>
+</html>

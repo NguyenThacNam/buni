@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{admin/layout :: page(
+            ${user.id != 0} ? 'Sửa người dùng' : 'Thêm người dùng',
+            'Thông tin tài khoản và phân quyền', 'user', ~{::main})}">
+<body>
+<main>
+
+    <div class="card">
+        <div class="card__head">
+            <h2 th:text="${user.id != 0} ? 'Cập nhật thông tin' : 'Tài khoản mới'">Thông tin</h2>
+        </div>
+
+        <div class="card__body">
+            <form th:action="@{/admin/user/save}" th:object="${user}" method="post">
+                <input type="hidden" th:field="*{id}">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Họ và tên</label>
+                        <input type="text" th:field="*{fullname}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tên đăng nhập</label>
+                        <input type="text" th:field="*{username}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" th:field="*{email}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Số điện thoại</label>
+                        <input type="text" th:field="*{phone}" maxlength="10" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ngày sinh</label>
+                        <input type="text" th:field="*{birthday}" placeholder="1999-12-25">
+                        <span class="hint">Định dạng YYYY-MM-DD</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Vai trò</label>
+                        <select name="role">
+                            <option th:each="r : ${roles}"
+                                    th:value="${r}"
+                                    th:text="${r.name() == 'ADMIN'} ? 'Quản trị viên' : 'Học viên'"
+                                    th:selected="${user.role != null and user.role == r}">
+                            </option>
+                        </select>
+                        <span class="hint">Quản trị viên được phép thêm, sửa, xóa khóa học.</span>
+                    </div>
+
+                    <div class="form-group form-group--full">
+                        <label th:text="${user.id != 0} ? 'Đặt lại mật khẩu' : 'Mật khẩu'">Mật khẩu</label>
+                        <input type="password" name="newPassword" autocomplete="new-password">
+                        <!-- Mật khẩu trong DB là hash BCrypt, không đọc ngược ra được nên
+                             không thể đổ sẵn vào ô này. Để trống khi sửa = giữ mật khẩu cũ. -->
+                        <span class="hint" th:if="${user.id != 0}">
+                            Để trống nếu không muốn đổi mật khẩu hiện tại.
+                        </span>
+                        <span class="hint" th:if="${user.id == 0}">
+                            Bắt buộc nhập. Mật khẩu sẽ được băm bằng BCrypt trước khi lưu.
+                        </span>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn--primary">Lưu</button>
+                    <a th:href="@{/admin/user}" class="btn btn--ghost">Hủy</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</main>
+</body>
+</html>

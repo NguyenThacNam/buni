@@ -1,0 +1,795 @@
+<title>Lộ trình BKAP Courses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+  :root {
+    /* Đỏ thương hiệu Bachkhoa Aptech, neutral lệch nhẹ về phía đỏ cho khỏi trơ */
+    --accent:        #C8102E;
+    --accent-soft:   #FBEEF0;
+    --accent-line:   #EBC9CF;
+
+    --ground:        #F7F4F5;
+    --surface:       #FFFFFF;
+    --surface-2:     #FBF9FA;
+    --line:          #E5DEE0;
+    --line-strong:   #D2C8CB;
+
+    --ink:           #1A1416;
+    --ink-2:         #4E4448;
+    --ink-3:         #7C7076;
+
+    --done:          #0F6B3F;
+    --done-soft:     #E8F2EC;
+    --block:         #A8301C;
+    --block-soft:    #FAECE9;
+    --wait:          #7A5600;
+    --wait-soft:     #F8F0DF;
+
+    --sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
+
+  :root:not([data-theme="light"]) {
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --accent:      #F27287;
+      --accent-soft: #2E1A1E;
+      --accent-line: #4A2A31;
+
+      --ground:      #141011;
+      --surface:     #1C1719;
+      --surface-2:   #221C1E;
+      --line:        #302729;
+      --line-strong: #443639;
+
+      --ink:         #F3EEEF;
+      --ink-2:       #C0B5B8;
+      --ink-3:       #8C8085;
+
+      --done:        #6FD09B;
+      --done-soft:   #14261D;
+      --block:       #F2907C;
+      --block-soft:  #2B1815;
+      --wait:        #E0B95C;
+      --wait-soft:   #2A2214;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --accent:      #F27287;
+    --accent-soft: #2E1A1E;
+    --accent-line: #4A2A31;
+
+    --ground:      #141011;
+    --surface:     #1C1719;
+    --surface-2:   #221C1E;
+    --line:        #302729;
+    --line-strong: #443639;
+
+    --ink:         #F3EEEF;
+    --ink-2:       #C0B5B8;
+    --ink-3:       #8C8085;
+
+    --done:        #6FD09B;
+    --done-soft:   #14261D;
+    --block:       #F2907C;
+    --block-soft:  #2B1815;
+    --wait:        #E0B95C;
+    --wait-soft:   #2A2214;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  /* ---------- Đầu trang ---------- */
+  .masthead {
+    padding: 56px 0 30px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 36px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.05;
+    letter-spacing: -.025em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 19px;
+    color: var(--ink-2);
+    margin: 0 0 24px;
+    max-width: 62ch;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 26px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  .meta b { color: var(--ink-2); font-weight: 700; }
+
+  /* ---------- Trạng thái hiện tại ---------- */
+  .status {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    padding: 22px 26px;
+    margin-bottom: 52px;
+  }
+  .status h2 {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 16px;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 18px 30px;
+    margin: 0;
+  }
+  .fact { display: flex; flex-direction: column; gap: 2px; }
+  .fact dt {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .fact dd {
+    margin: 0;
+    font-family: var(--sans);
+    font-size: 15.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .fact dd.warn { color: var(--block); }
+  .fact dd.ok { color: var(--done); }
+
+  /* ---------- Chặng ---------- */
+  .phase { margin-bottom: 54px; }
+
+  .phase__head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line-strong);
+    margin-bottom: 4px;
+  }
+  .phase__num {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    flex: none;
+    padding-top: 4px;
+  }
+  .phase__title {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 25px;
+    letter-spacing: -.015em;
+    margin: 0;
+    flex: 1;
+    text-wrap: balance;
+  }
+  .phase__goal {
+    color: var(--ink-2);
+    margin: 14px 0 22px;
+    max-width: 64ch;
+  }
+  .dep {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--wait);
+    background: var(--wait-soft);
+    padding: 3px 9px;
+    margin-bottom: 18px;
+  }
+
+  /* ---------- Danh sách việc ---------- */
+  .tasks { display: flex; flex-direction: column; gap: 0; }
+  .task {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 18px;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: start;
+  }
+  .task:first-child { border-top: 1px solid var(--line); }
+  .task__name {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink);
+  }
+  .task__note {
+    grid-column: 1;
+    font-size: 15px;
+    color: var(--ink-2);
+    max-width: 60ch;
+  }
+  .who {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    white-space: nowrap;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-2);
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+  .who--me { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
+  .who--you { border-color: var(--line-strong); background: var(--surface-2); color: var(--ink-2); }
+  .who--moodle { border-color: var(--line-strong); background: var(--surface-2); color: var(--ink-3); }
+
+  .doneline {
+    margin-top: 20px;
+    padding: 13px 18px;
+    background: var(--done-soft);
+    border-left: 3px solid var(--done);
+    font-size: 15.5px;
+    color: var(--ink-2);
+  }
+  .doneline b {
+    font-family: var(--sans);
+    font-size: 11.5px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--done);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* ---------- Quyết định ---------- */
+  .decisions {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 28px 30px;
+    margin-bottom: 54px;
+  }
+  .decisions h2, .bugs h2 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 22px;
+    margin: 0 0 8px;
+    letter-spacing: -.015em;
+  }
+  .decisions > p, .bugs > p { color: var(--ink-2); margin: 0 0 22px; max-width: 62ch; }
+  .decision {
+    padding: 16px 0;
+    border-top: 1px solid var(--line);
+  }
+  .decision__q {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 16.5px;
+    margin: 0 0 5px;
+  }
+  .decision__why { margin: 0; font-size: 15px; color: var(--ink-2); }
+  .decision__why em {
+    font-style: normal;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--block);
+    background: var(--block-soft);
+    padding: 2px 7px;
+    margin-left: 4px;
+    white-space: nowrap;
+  }
+
+  /* ---------- Lỗi đã biết ---------- */
+  .bugs { margin-bottom: 40px; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 11px 14px 11px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 400;
+    border-bottom: 1px solid var(--line-strong);
+  }
+  td:first-child { font-family: var(--sans); font-weight: 600; color: var(--ink); width: 38%; }
+  td:last-child, th:last-child { padding-right: 0; }
+
+  code {
+    font-family: var(--mono);
+    font-size: .86em;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  footer {
+    border-top: 1px solid var(--line-strong);
+    padding-top: 22px;
+    font-size: 14.5px;
+    color: var(--ink-3);
+    max-width: 62ch;
+  }
+
+  @media (max-width: 620px) {
+    body { font-size: 16px; }
+    .task { grid-template-columns: 1fr; }
+    .who { grid-row: auto; grid-column: 1; justify-self: start; margin-top: 6px; }
+    td:first-child { width: auto; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">BKAP Courses · Kế hoạch triển khai</div>
+    <h1>Từ chạy được trên máy đến chạy thật trên buni.vn</h1>
+    <p class="standfirst">
+      Sáu chặng, xếp theo thứ tự bắt buộc. Chặng sau chỉ làm được khi chặng trước
+      xong — không phải vì quy trình, mà vì thiếu dữ liệu đầu vào thật sự.
+    </p>
+    <div class="meta">
+      <span><b>Ngày lập</b> 09/09/2026</span>
+      <span><b>Hệ thống</b> Spring Boot 4 · React 19 · PostgreSQL 17 · Moodle</span>
+      <span><b>Trạng thái</b> SSO vừa thông</span>
+    </div>
+  </header>
+
+  <section class="status">
+    <h2>Đang ở đâu</h2>
+    <dl class="facts">
+      <div class="fact">
+        <dt>Chưa commit</dt>
+        <dd class="warn">~50 tệp</dd>
+      </div>
+      <div class="fact">
+        <dt>Bản trên server</dt>
+        <dd class="warn">Còn dùng MySQL</dd>
+      </div>
+      <div class="fact">
+        <dt>SSO sang Moodle</dt>
+        <dd class="ok">Đã đăng nhập được</dd>
+      </div>
+      <div class="fact">
+        <dt>Ghi danh khóa học</dt>
+        <dd class="warn">Chưa có</dd>
+      </div>
+      <div class="fact">
+        <dt>Khóa học đã nối LMS</dt>
+        <dd class="warn">0 / 10</dd>
+      </div>
+      <div class="fact">
+        <dt>Thanh toán</dt>
+        <dd class="warn">Chưa có bảng nào</dd>
+      </div>
+    </dl>
+  </section>
+
+
+  <!-- ================= CHẶNG 0 ================= -->
+  <section class="phase">
+    <div class="phase__head">
+      <div class="phase__num">CHẶNG 0</div>
+      <h2 class="phase__title">Chốt lại những gì đã làm</h2>
+    </div>
+    <p class="phase__goal">
+      Toàn bộ công việc từ hôm chuyển PostgreSQL tới giờ đang nằm trên đúng một ổ đĩa,
+      chưa vào git lần nào. Đây là việc gấp nhất và cũng nhanh nhất.
+    </p>
+
+    <div class="tasks">
+      <div class="task">
+        <div class="task__name">Commit toàn bộ thay đổi</div>
+        <div class="task__note">Chuyển PostgreSQL, BCrypt, giao diện admin, refresh token, upload ảnh, phân trang — gộp thành vài commit theo chủ đề chứ không dồn một cục.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Quyết định số phận thư mục <code>static/</code></div>
+        <div class="task__note">Bản build React đang untracked. Commit vào repo, hay cho vào <code>.gitignore</code> rồi build lúc deploy?</div>
+        <div class="who who--you">Bạn</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Build jar và đẩy lên server</div>
+        <div class="task__note">Bản jar hiện chạy trên <code>E:\Bkap_Courses</code> vẫn là bản MySQL cũ, chưa có đăng nhập admin, chưa có sửa lỗi chuyển hướng về <code>localhost:9090</code>.</div>
+        <div class="who who--you">Bạn</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Chuẩn bị PostgreSQL trên server</div>
+        <div class="task__note">Tạo database, nạp <code>bkap-ai-courses.sql</code>, và kiểm tra có ít nhất một tài khoản ADMIN mà bạn biết mật khẩu — nếu không sẽ tự khoá mình khỏi trang quản trị.</div>
+        <div class="who who--you">Bạn</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Trỏ thư mục ảnh tải lên</div>
+        <div class="task__note">Thêm <code>--app.upload.dir=E:\Bkap_Courses\uploads</code> vào <code>web.config</code>. Thư mục này nằm ngoài jar, đừng xoá khi deploy bản mới.</div>
+        <div class="who who--you">Bạn</div>
+      </div>
+    </div>
+
+    <div class="doneline">
+      <b>Xong khi</b>
+      <code>git status</code> sạch, và mở tên miền thật thấy được trang đăng nhập admin mới.
+    </div>
+  </section>
+
+
+  <!-- ================= CHẶNG 1 ================= -->
+  <section class="phase">
+    <div class="phase__head">
+      <div class="phase__num">CHẶNG 1</div>
+      <h2 class="phase__title">Hoàn tất tích hợp Moodle</h2>
+    </div>
+    <p class="phase__goal">
+      SSO đã thông — bấm là vào được LMS mà không phải đăng nhập lại. Nhưng vào xong
+      người học đứng ở trang chủ Moodle, không biết vào khóa nào, và cũng chưa được
+      ghi danh nên có tìm cũng không thấy khóa đó đâu.
+    </p>
+
+    <div class="tasks">
+      <div class="task">
+        <div class="task__name">1.1 · Sửa tra cứu người dùng</div>
+        <div class="task__note">
+          <code>core_user_get_users_by_field</code> trả rỗng kể cả với tài khoản có thật.
+          Thêm quyền <code>moodle/user:viewdetails</code> và <code>moodle/site:viewparticipants</code>
+          vào vai trò <code>bkap_ws</code>. Nếu vẫn không được, đường vòng là đọc id ngay
+          từ phản hồi của <code>core_user_create_users</code>.
+        </div>
+        <div class="who who--moodle">Admin Moodle</div>
+      </div>
+      <div class="task">
+        <div class="task__name">1.2 · Nối khóa học hai bên</div>
+        <div class="task__note">
+          Thêm cột <code>moodle_course_id</code> và một ô nhập trong form admin. Admin lấy
+          con số từ URL khóa học bên LMS, ví dụ <code>/course/view.php?id=2</code>.
+        </div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">1.3 · Ghi danh tự động</div>
+        <div class="task__note">
+          Gọi <code>enrol_manual_enrol_users</code> khi người học bấm "Đăng ký học".
+          Cần Moodle user id, tức là phụ thuộc hoàn toàn vào 1.1.
+        </div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">1.4 · Vào thẳng khóa học</div>
+        <div class="task__note">
+          Thêm <code>wantsurl</code> vào link SSO để nhảy đúng vào khóa vừa bấm, thay vì
+          thả người dùng ở trang chủ.
+        </div>
+        <div class="who who--me">Tôi</div>
+      </div>
+    </div>
+
+    <div class="doneline">
+      <b>Xong khi</b>
+      Học viên bấm "Đăng ký học" trên buni.vn, tab mới mở ra đã đăng nhập sẵn và đang
+      đứng trong đúng khóa học đó, xem được bài giảng.
+    </div>
+  </section>
+
+
+  <!-- ================= CHẶNG 2 ================= -->
+  <section class="phase">
+    <div class="phase__head">
+      <div class="phase__num">CHẶNG 2</div>
+      <h2 class="phase__title">Siết lại bảo mật</h2>
+    </div>
+    <p class="phase__goal">
+      Những thứ chạy được nhưng chưa an toàn. Làm sau Chặng 1 vì siết trước thì
+      vướng lúc gỡ lỗi, mà để lâu quá thì thành thói quen khó sửa.
+    </p>
+
+    <div class="tasks">
+      <div class="task">
+        <div class="task__name">Đưa khoá bí mật ra khỏi jar</div>
+        <div class="task__note">
+          Mật khẩu PostgreSQL, token Moodle và khoá ký JWT đang nằm thẳng trong
+          <code>application.properties</code>, tức là nằm trong file jar. Ai lấy được jar
+          là đọc được hết. Chuyển sang biến môi trường.
+        </div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Kiểm tra hạn token Moodle</div>
+        <div class="task__note">
+          Lúc tạo token, ô "Hợp lệ cho đến khi" mặc định là một tháng. Nếu chưa bỏ tick
+          thì đầu tháng 10 SSO sẽ chết mà không báo gì.
+        </div>
+        <div class="who who--you">Bạn</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Giới hạn IP cho token</div>
+        <div class="task__note">
+          Điền IP máy chủ vào ô "Giới hạn IP" của token, để token lộ ra ngoài cũng không
+          dùng được từ máy khác. Làm sau khi đã deploy và biết IP cố định.
+        </div>
+        <div class="who who--you">Bạn</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Bỏ mật khẩu thô khỏi trình duyệt</div>
+        <div class="task__note">
+          Frontend đang giữ mật khẩu người dùng trong <code>sessionStorage._mp</code> để gửi
+          sang Moodle lúc tạo tài khoản. Cần thiết kế lại luồng tạo tài khoản để không
+          phải giữ nó nữa.
+        </div>
+        <div class="who who--me">Tôi</div>
+      </div>
+    </div>
+
+    <div class="doneline">
+      <b>Xong khi</b>
+      Giải nén file jar không tìm thấy mật khẩu nào, và mở DevTools trên buni.vn không
+      còn thấy <code>_mp</code>.
+    </div>
+  </section>
+
+
+  <!-- ================= CHẶNG 3 ================= -->
+  <section class="phase">
+    <div class="phase__head">
+      <div class="phase__num">CHẶNG 3</div>
+      <h2 class="phase__title">Thay dữ liệu giả bằng dữ liệu thật</h2>
+    </div>
+    <p class="phase__goal">
+      Trang "Khóa học của tôi" hiện hiển thị ba khóa bịa sẵn trong mã nguồn, giống hệt
+      nhau với mọi người đăng nhập. Bảng <code>enrollment</code> đã có entity và giao diện
+      quản trị từ đợt trước, chỉ còn nối vào.
+    </p>
+
+    <div class="tasks">
+      <div class="task">
+        <div class="task__name">Nối dashboard vào bảng ghi danh</div>
+        <div class="task__note">Thêm API trả về khóa học của người đang đăng nhập, thay <code>mockEnrolledCourses</code> trong <code>DashboardHome.jsx</code> và <code>MyCoursesPage.jsx</code>.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Xoá dữ liệu tĩnh còn sót</div>
+        <div class="task__note"><code>src/data/courses.js</code> vẫn tồn tại song song với API thật, dễ gây nhầm khi sửa.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Xử lý 5 danh mục rỗng</div>
+        <div class="task__note">
+          Backend, C/C++, Cơ sở dữ liệu, Bảo mật, UI/UX đều chưa có khóa nào. Thêm khóa
+          học cho chúng, hay ẩn khỏi thanh lọc?
+        </div>
+        <div class="who who--you">Bạn</div>
+      </div>
+    </div>
+
+    <div class="doneline">
+      <b>Xong khi</b>
+      Hai người dùng khác nhau đăng nhập thấy hai danh sách khóa học khác nhau, và
+      trong mã nguồn không còn chữ <code>mock</code> nào.
+    </div>
+  </section>
+
+
+  <!-- ================= CHẶNG 4 ================= -->
+  <section class="phase">
+    <div class="phase__head">
+      <div class="phase__num">CHẶNG 4</div>
+      <h2 class="phase__title">Thanh toán</h2>
+    </div>
+    <span class="dep">Cần chốt quyết định số 1 trước khi bắt đầu</span>
+    <p class="phase__goal">
+      Chặng nặng nhất. Giao diện thanh toán đã có sẵn từ trước nhưng hoàn toàn không
+      có backend — không bảng, không API, và cũng không nút nào dẫn tới nó.
+    </p>
+
+    <div class="tasks">
+      <div class="task">
+        <div class="task__name">Thiết kế ba bảng dữ liệu</div>
+        <div class="task__note">Đơn hàng, mã giảm giá, và giao dịch để đối soát với cổng thanh toán.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Viết API thanh toán</div>
+        <div class="task__note">Ba endpoint mà frontend đang gọi sẵn nhưng chưa ai trả lời: tạo đơn, kiểm tra mã giảm giá, tra trạng thái giao dịch.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Đăng ký tài khoản cổng thanh toán</div>
+        <div class="task__note">VNPay hoặc MoMo đều cần hợp đồng và tài khoản merchant. Có môi trường thử nghiệm để làm trước khi ký.</div>
+        <div class="who who--you">Bạn</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Nối ghi danh vào sau thanh toán</div>
+        <div class="task__note">Thanh toán thành công thì mới gọi ghi danh Moodle. Chỗ này chính là lý do phải chốt quyết định số 1 từ đầu.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+    </div>
+
+    <div class="doneline">
+      <b>Xong khi</b>
+      Mua một khóa trả phí bằng tài khoản thử của cổng thanh toán, đơn hàng được ghi
+      nhận, và tài khoản tự động được ghi danh trên LMS.
+    </div>
+  </section>
+
+
+  <!-- ================= CHẶNG 5 ================= -->
+  <section class="phase">
+    <div class="phase__head">
+      <div class="phase__num">CHẶNG 5</div>
+      <h2 class="phase__title">Trả nợ kỹ thuật</h2>
+    </div>
+    <p class="phase__goal">
+      Không chặn ai cả, nhưng để lâu thì càng khó sửa. Làm rải rác giữa các chặng trên
+      cũng được.
+    </p>
+
+    <div class="tasks">
+      <div class="task">
+        <div class="task__name">Quên mật khẩu bằng mã OTP</div>
+        <div class="task__note">Gửi mã 6 số qua email, hạn 10 phút, giới hạn số lần nhập sai. Cần một App Password của Gmail hoặc SMTP của trường.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Sửa menu danh mục hỏng</div>
+        <div class="task__note">Dropdown "Full-Stack Developer" trỏ tới <code>/courses/full-stack</code> trong khi API nhận id kiểu số, bấm vào là lỗi.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Kiểm tra dữ liệu đầu vào</div>
+        <div class="task__note">Chưa có validation và chưa có chỗ bắt lỗi chung. Nhập slug trùng là ra trang 500 trắng xoá kèm thông báo lỗi nội bộ.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Nới kiểu khóa chính</div>
+        <div class="task__note">Khóa học, danh mục và người dùng đang dùng <code>short</code>, trần 32767. Đủ cho bây giờ, nhưng là quả bom hẹn giờ.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+      <div class="task">
+        <div class="task__name">Đồng bộ mật khẩu sang Moodle</div>
+        <div class="task__note">Đổi mật khẩu bên buni thì bên LMS vẫn giữ mật khẩu cũ. Chưa vỡ vì SSO không cần mật khẩu, nhưng ai đăng nhập thẳng vào Moodle sẽ thấy lệch.</div>
+        <div class="who who--me">Tôi</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ================= QUYẾT ĐỊNH ================= -->
+  <section class="decisions">
+    <h2>Năm câu cần bạn trả lời</h2>
+    <p>Mỗi câu đang chặn một phần công việc. Trả lời được câu nào thì phần đó chạy tiếp.</p>
+
+    <div class="decision">
+      <p class="decision__q">1. Ghi danh trước hay sau khi trả tiền?</p>
+      <p class="decision__why">
+        Bấm "Đăng ký học" mà ghi danh luôn thì khóa 1.399.000đ ai bấm cũng vào học được.
+        Đây là chuyện nghiệp vụ, không phải kỹ thuật.
+        <em>chặn Chặng 4</em>
+      </p>
+    </div>
+
+    <div class="decision">
+      <p class="decision__q">2. Khóa chưa nối LMS thì nút "Đăng ký học" làm gì?</p>
+      <p class="decision__why">
+        Ẩn nút, đổi chữ thành "Sắp khai giảng", hay vẫn cho bấm rồi báo lỗi? Hiện cả
+        10 khóa đều chưa nối.
+        <em>chặn 1.2</em>
+      </p>
+    </div>
+
+    <div class="decision">
+      <p class="decision__q">3. Một khóa bên buni có ứng với nhiều khóa bên LMS không?</p>
+      <p class="decision__why">
+        Nếu "Full-Stack Developer" thực chất là ba khóa riêng trên Moodle thì một cột
+        <code>moodle_course_id</code> là không đủ, phải làm bảng nối.
+        <em>chặn 1.2</em>
+      </p>
+    </div>
+
+    <div class="decision">
+      <p class="decision__q">4. Thư mục <code>static/</code> commit hay bỏ qua?</p>
+      <p class="decision__why">
+        Đó là kết quả build của React. Commit thì repo phình và hay xung đột; bỏ qua
+        thì phải build lại mỗi lần deploy.
+        <em>chặn Chặng 0</em>
+      </p>
+    </div>
+
+    <div class="decision">
+      <p class="decision__q">5. Dùng SMTP nào để gửi mã OTP?</p>
+      <p class="decision__why">
+        Gmail kèm App Password là nhanh nhất để thử. Mail server của trường mới là thứ
+        dùng được lâu dài, vì thư đi từ chính tên miền của trường.
+        <em>chặn 5.1</em>
+      </p>
+    </div>
+  </section>
+
+
+  <!-- ================= LỖI ĐÃ BIẾT ================= -->
+  <section class="bugs">
+    <h2>Lỗi đã biết, chưa sửa</h2>
+    <p>Không nằm trong chặng nào ở trên vì đều nhỏ, nhưng đã xác nhận là có thật.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Chỗ hỏng</th>
+            <th scope="col">Biểu hiện</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Tra cứu người dùng Moodle</td>
+            <td>Trả về rỗng kể cả với tài khoản có thật, khiến mỗi lần bấm "Đăng ký học" lại gọi thừa một lệnh tạo tài khoản và lệnh đó thất bại.</td>
+          </tr>
+          <tr>
+            <td>Log đồng bộ Moodle</td>
+            <td>In dòng "Đồng bộ thành công" kèm luôn nội dung lỗi, vì không kiểm tra phản hồi trước khi ghi log.</td>
+          </tr>
+          <tr>
+            <td>Menu danh mục</td>
+            <td>Trỏ tới slug trong khi API nhận id kiểu số, bấm vào là lỗi chuyển kiểu.</td>
+          </tr>
+          <tr>
+            <td>Trang thanh toán</td>
+            <td>Tồn tại nhưng không nút nào dẫn tới, chỉ vào được bằng cách gõ tay URL. Bấm xác nhận là nhảy sang trang thất bại vì backend chưa có endpoint.</td>
+          </tr>
+          <tr>
+            <td><code>/admin/logintoken</code></td>
+            <td>Cách làm SSO thứ tư còn sót lại: tải trang đăng nhập Moodle rồi dùng regex bới mã CSRF. Frontend không gọi bao giờ, nên xoá được.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Thứ tự sáu chặng là thứ tự phụ thuộc thật, không phải thứ tự ưu tiên. Chặng 5 làm
+    xen kẽ lúc nào cũng được. Riêng Chặng 0 thì càng để lâu càng rủi ro, vì mọi thứ
+    hiện chỉ tồn tại trên một ổ đĩa duy nhất.
+  </footer>
+
+</div>

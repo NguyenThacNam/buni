@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-bg text-gray-900 font-sans antialiased selection:bg-primary selection:text-white;
+    scroll-behavior: smooth;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading;
+  }
+}
+
+/* Reusable Focus Ring Utility */
+.focus-ring {
+  @apply focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none;
+}
+
+/* Swiper custom styling to align with BKAP red brand color */
+.swiper-pagination-bullet-active {
+  background: #c8102e !important;
+}
+
+/* Custom background patterns */
+.bg-dot-grid {
+  background-image: radial-gradient(
+    rgba(200, 16, 46, 0.1) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Nội dung HTML soạn bên Moodle, hiển thị lại trên trang học buni.
+
+   Không thể đặt sẵn class Tailwind cho từng thẻ vì HTML này do giáo viên
+   soạn bên LMS, buni chỉ nhận về rồi hiện. Nên phải định kiểu theo tên thẻ.
+   ────────────────────────────────────────────────────────────── */
+.noi-dung-lms {
+  color: #374151;
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+.noi-dung-lms > *:first-child { margin-top: 0; }
+.noi-dung-lms > *:last-child  { margin-bottom: 0; }
+
+.noi-dung-lms h1,
+.noi-dung-lms h2,
+.noi-dung-lms h3,
+.noi-dung-lms h4 {
+  font-family: "Barlow Condensed", system-ui, sans-serif;
+  font-weight: 700;
+  color: #111827;
+  margin: 1.5em 0 0.5em;
+  line-height: 1.3;
+}
+.noi-dung-lms h1 { font-size: 1.5rem; }
+.noi-dung-lms h2 { font-size: 1.25rem; }
+.noi-dung-lms h3 { font-size: 1.125rem; }
+
+.noi-dung-lms p { margin: 0.75em 0; }
+
+.noi-dung-lms ul,
+.noi-dung-lms ol { margin: 0.75em 0; padding-left: 1.5rem; }
+.noi-dung-lms ul { list-style: disc; }
+.noi-dung-lms ol { list-style: decimal; }
+.noi-dung-lms li { margin: 0.35em 0; }
+
+.noi-dung-lms a { color: #c8102e; text-decoration: underline; }
+.noi-dung-lms strong { font-weight: 700; color: #111827; }
+
+/* Giáo viên hay dán ảnh khổ lớn — ép co lại cho vừa khung, khỏi tràn ngang. */
+.noi-dung-lms img,
+.noi-dung-lms video,
+.noi-dung-lms iframe {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1em 0;
+}
+
+/* Bảng cũng vậy: cho cuộn ngang trong khung thay vì đẩy giãn cả trang. */
+.noi-dung-lms table {
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+.noi-dung-lms th,
+.noi-dung-lms td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.noi-dung-lms th { background: #f9fafb; font-weight: 600; }
+
+.noi-dung-lms blockquote {
+  border-left: 3px solid #c8102e;
+  padding-left: 1rem;
+  margin: 1em 0;
+  color: #6b7280;
+}
+
+.noi-dung-lms pre {
+  background: #f3f4f6;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.noi-dung-lms code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}

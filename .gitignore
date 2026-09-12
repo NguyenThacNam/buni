@@ -1,0 +1,83 @@
+# ==============================================================================
+# BÍ MẬT — tuyệt đối không đưa lên git
+# ==============================================================================
+# Mật khẩu CSDL, token Moodle, khóa ký JWT. Mẫu các khóa cần điền nằm ở
+# secrets.properties.example (file mẫu đó thì CÓ đưa lên).
+secrets.properties
+
+# Biến môi trường riêng từng máy (các file .env / .env.development /
+# .env.production chỉ chứa địa chỉ API, không có bí mật — vẫn đưa lên).
+.env.local
+.env.*.local
+
+# Sao lưu CSDL: chứa dữ liệu thật của học viên và hash mật khẩu.
+# (nang-cap-csdl-server.sql gợi ý lệnh pg_dump ra file sao-luu-*.sql)
+sao-luu*.sql
+*.dump
+*.backup
+
+# Danh sách tài khoản tải về từ trang "Nhập học viên từ Excel": có mật khẩu.
+tai-khoan-hoc-vien*.xlsx
+
+
+# ==============================================================================
+# BACKEND — Spring Boot (project/BKAP-Courses)
+# ==============================================================================
+# Kết quả biên dịch / đóng gói jar
+target/
+
+# Ảnh admin tải lên — dữ liệu lúc chạy, không phải mã nguồn. Sao lưu cùng CSDL.
+project/BKAP-Courses/uploads/
+
+# Bản build React do `npm run build:be` chép vào. Sinh ra lại được bất cứ lúc
+# nào, nặng vài MB và đổi hết mỗi lần build — không đáng lưu vào git.
+# Máy mới clone về: chạy `npm run build:be` trong bkap-ai-courses TRƯỚC khi
+# đóng gói jar, không thì jar không có giao diện người dùng.
+project/BKAP-Courses/src/main/resources/static/
+
+HELP.md
+.mvn/wrapper/maven-wrapper.jar
+
+
+# ==============================================================================
+# FRONTEND — React (project/bkap-ai-courses)
+# ==============================================================================
+node_modules/
+project/bkap-ai-courses/build/
+coverage/
+.pnp
+.pnp.js
+
+
+# ==============================================================================
+# Nhật ký
+# ==============================================================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+# ==============================================================================
+# Trình soạn thảo / IDE
+# ==============================================================================
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated
+.springBeans
+.sts4-cache/
+
+
+# ==============================================================================
+# Hệ điều hành
+# ==============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{admin/layout :: page('Tổng quan', 'Toàn cảnh hệ thống BKAP Courses', 'dashboard', ~{::main})}">
+<body>
+<main>
+
+    <div class="stats">
+        <div class="stat stat--brand">
+            <div class="stat__label">Khóa học</div>
+            <div class="stat__value" th:text="${soKhoaHoc}">0</div>
+            <div class="stat__meta" th:text="${soDanhMuc} + ' danh mục'">0 danh mục</div>
+        </div>
+
+        <div class="stat stat--info">
+            <div class="stat__label">Người dùng</div>
+            <div class="stat__value" th:text="${soNguoiDung}">0</div>
+            <div class="stat__meta" th:text="${soAdmin} + ' quản trị viên'">0 quản trị viên</div>
+        </div>
+
+        <div class="stat stat--ok">
+            <div class="stat__label">Lượt ghi danh</div>
+            <div class="stat__value" th:text="${soGhiDanh}">0</div>
+            <div class="stat__meta">
+                <span th:text="${soDangHoc} + ' đang học'">0 đang học</span> ·
+                <span th:text="${soHoanThanh} + ' hoàn thành'">0 hoàn thành</span>
+            </div>
+        </div>
+
+        <div class="stat stat--warn">
+            <div class="stat__label">Học viên (hiển thị)</div>
+            <div class="stat__value" th:text="${#numbers.formatInteger(tongHocVien, 0, 'POINT')}">0</div>
+            <div class="stat__meta">Cộng dồn từ các khóa học</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom:22px;">
+        <div class="card__head">
+            <h2>Khóa học mới nhất</h2>
+            <a th:href="@{/admin/course}" class="btn btn--ghost btn--sm">Xem tất cả</a>
+        </div>
+
+        <div class="table-wrap" th:if="${!khoaHocMoi.isEmpty()}">
+            <table class="data">
+                <thead>
+                <tr>
+                    <th>Khóa học</th>
+                    <th>Danh mục</th>
+                    <th>Giảng viên</th>
+                    <th class="num">Học viên</th>
+                    <th class="num">Đánh giá</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="c : ${khoaHocMoi}">
+                    <td>
+                        <div class="cell-title" th:text="${c.title}"></div>
+                        <div class="cell-sub" th:text="${c.subtitle}"></div>
+                    </td>
+                    <td><span class="badge badge--muted" th:text="${c.category?.name} ?: '—'"></span></td>
+                    <td th:text="${c.instructor?.fullname} ?: '—'"></td>
+                    <td class="num" th:text="${c.studentCount}">0</td>
+                    <td class="num" th:text="${c.rating} + ' ★'">0 ★</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="empty" th:if="${khoaHocMoi.isEmpty()}">
+            <div class="empty__icon">▤</div>
+            <div class="empty__title">Chưa có khóa học nào</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card__head">
+            <h2>Ghi danh gần đây</h2>
+            <a th:href="@{/admin/enrollment}" class="btn btn--ghost btn--sm">Xem tất cả</a>
+        </div>
+
+        <div class="table-wrap" th:if="${!ghiDanhMoi.isEmpty()}">
+            <table class="data">
+                <thead>
+                <tr>
+                    <th>Học viên</th>
+                    <th>Khóa học</th>
+                    <th>Trạng thái</th>
+                    <th>Tiến độ</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="e : ${ghiDanhMoi}">
+                    <td class="cell-title" th:text="${e.user?.fullname} ?: '—'"></td>
+                    <td th:text="${e.course?.title} ?: '—'"></td>
+                    <td>
+                        <span class="badge"
+                              th:classappend="${e.status == 'COMPLETED'} ? 'badge--ok' :
+                                              (${e.status == 'IN_PROGRESS'} ? 'badge--info' : 'badge--muted')"
+                              th:text="${e.statusLabel}"></span>
+                    </td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress__track">
+                                <div class="progress__bar" th:style="'width:' + ${e.progressPercent} + '%'"></div>
+                            </div>
+                            <span class="progress__num" th:text="${e.progressPercent} + '%'">0%</span>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="empty" th:if="${ghiDanhMoi.isEmpty()}">
+            <div class="empty__icon">✓</div>
+            <div class="empty__title">Chưa có lượt ghi danh nào</div>
+        </div>
+    </div>
+
+</main>
+</body>
+</html>

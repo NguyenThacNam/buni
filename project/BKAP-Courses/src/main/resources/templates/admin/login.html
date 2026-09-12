@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<!--
+  Trang đăng nhập khu quản trị. Cố ý KHÔNG dùng layout chung: người chưa đăng
+  nhập thì không nên nhìn thấy sidebar liệt kê các mục quản trị.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Đăng nhập · BKAP Admin</title>
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <style>
+        .login-wrap {
+            min-height: 100vh; display: flex; align-items: center;
+            justify-content: center; padding: 20px;
+        }
+        .login-card { width: 100%; max-width: 380px; }
+        .login-head { text-align: center; margin-bottom: 22px; }
+        .login-head b { display: block; font-size: 20px; letter-spacing: .3px; }
+        .login-head span { color: var(--ink-3); font-size: 13px; }
+        .login-card .form-group { margin-bottom: 14px; }
+        .login-card .btn { width: 100%; justify-content: center; margin-top: 4px; }
+        .login-foot { text-align: center; margin-top: 18px; font-size: 12.5px; color: var(--ink-3); }
+    </style>
+</head>
+<body>
+<div class="login-wrap">
+    <div class="login-card">
+
+        <div class="login-head">
+            <b>BKAP ADMIN</b>
+            <span>Bachkhoa Education</span>
+        </div>
+
+        <div class="alert alert--danger" th:if="${param.error}">
+            <span>✕</span>
+            <span>Sai tên đăng nhập hoặc mật khẩu.</span>
+        </div>
+        <div class="alert alert--ok" th:if="${param.logout}">
+            <span>✓</span>
+            <span>Bạn đã đăng xuất.</span>
+        </div>
+
+        <div class="card">
+            <div class="card__body">
+                <!-- Thymeleaf tự chèn hidden input _csrf vào form có th:action -->
+                <form th:action="@{/admin/login}" method="post">
+                    <div class="form-group">
+                        <label>Tên đăng nhập</label>
+                        <input type="text" name="username" autofocus required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Mật khẩu</label>
+                        <input type="password" name="password" required>
+                    </div>
+
+                    <button type="submit" class="btn btn--primary">Đăng nhập</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="login-foot">Chỉ tài khoản có quyền quản trị viên mới vào được.</div>
+
+    </div>
+</div>
+</body>
+</html>

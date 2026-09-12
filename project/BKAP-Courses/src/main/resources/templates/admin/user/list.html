@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{admin/layout :: page('Người dùng', 'Học viên và quản trị viên của hệ thống', 'user', ~{::main})}">
+<body>
+<main>
+
+    <div class="toolbar">
+        <a th:href="@{/admin/user/create}" class="btn btn--primary">+ Thêm người dùng</a>
+        <a th:href="@{/admin/user/import}" class="btn btn--ghost">⬆ Nhập từ Excel</a>
+        <div th:replace="~{admin/fragments :: oTimKiem('/admin/user', ${q}, 'Tìm theo tên, tài khoản, email, SĐT…')}"></div>
+        <div class="toolbar__spacer"></div>
+        <div th:replace="~{admin/fragments :: tomTat(${trang}, ${q})}"></div>
+    </div>
+
+    <div class="card">
+        <div class="table-wrap" th:if="${!users.isEmpty()}">
+            <table class="data">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Họ tên</th>
+                    <th>Tên đăng nhập</th>
+                    <th>Điện thoại</th>
+                    <th>Vai trò</th>
+                    <th>Trạng thái</th>
+                    <th>Đăng nhập gần nhất</th>
+                    <th>Hành động</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="u : ${users}">
+                    <td th:text="${u.id}"></td>
+                    <td>
+                        <div class="cell-title" th:text="${u.fullname}"></div>
+                        <div class="cell-sub" th:text="${u.email}"></div>
+                    </td>
+                    <td th:text="${u.username}"></td>
+                    <td th:text="${u.phone}"></td>
+                    <td>
+                        <span class="badge"
+                              th:classappend="${u.role != null and u.role.name() == 'ADMIN'} ? 'badge--brand' : 'badge--muted'"
+                              th:text="${u.role != null and u.role.name() == 'ADMIN'} ? 'Quản trị viên' : 'Học viên'"></span>
+                    </td>
+                    <td>
+                        <span class="badge" th:classappend="${u.online} ? 'badge--ok' : 'badge--muted'"
+                              th:text="${u.online} ? 'Đang online' : 'Offline'"></span>
+                    </td>
+                    <td class="cell-sub"
+                        th:text="${u.lastLogin != null} ? ${#dates.format(u.lastLogin, 'dd-MM-yyyy HH:mm')} : 'Chưa đăng nhập'"></td>
+                    <td>
+                        <div class="row-actions">
+                            <a th:href="@{/admin/user/edit/{id}(id=${u.id})}">Sửa</a>
+                            <span class="sep">|</span>
+                            <!-- Xóa bắt buộc đi bằng POST, xem ghi chú ở admin/category/list.html -->
+                            <form th:action="@{/admin/user/delete/{id}(id=${u.id})}" method="post"
+                                  style="display:inline;"
+                                  onsubmit="return confirm('Bạn có chắc muốn xóa người dùng này?');">
+                                <button type="submit" class="btn-link btn-link--danger">Xóa</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="empty" th:if="${users.isEmpty()}">
+            <div class="empty__icon">◉</div>
+            <div class="empty__title"
+                 th:text="${q != null and !q.isEmpty()} ? 'Không tìm thấy người dùng nào' : 'Chưa có người dùng nào'">
+            </div>
+        </div>
+
+        <div th:replace="~{admin/fragments :: phanTrang(${trang}, '/admin/user', ${q})}"></div>
+    </div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{admin/layout :: page('Ghi danh', 'Học viên nào đang học khóa nào, tiến độ tới đâu', 'enrollment', ~{::main})}">
+<body>
+<main>
+
+    <div class="toolbar">
+        <a th:href="@{/admin/enrollment/create}" class="btn btn--primary">+ Ghi danh học viên</a>
+        <div th:replace="~{admin/fragments :: oTimKiem('/admin/enrollment', ${q}, 'Tìm theo học viên hoặc khóa học…')}"></div>
+        <div class="toolbar__spacer"></div>
+        <div th:replace="~{admin/fragments :: tomTat(${trang}, ${q})}"></div>
+    </div>
+
+    <div class="card">
+        <div class="table-wrap" th:if="${!enrollments.isEmpty()}">
+            <table class="data">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Học viên</th>
+                    <th>Khóa học</th>
+                    <th>Trạng thái</th>
+                    <th>Tiến độ</th>
+                    <th>Ngày ghi danh</th>
+                    <th>Học gần nhất</th>
+                    <th>Hành động</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="e : ${enrollments}">
+                    <td th:text="${e.id}"></td>
+                    <td>
+                        <div class="cell-title" th:text="${e.user?.fullname} ?: '—'"></div>
+                        <div class="cell-sub" th:text="${e.user?.username}"></div>
+                    </td>
+                    <td th:text="${e.course?.title} ?: '—'"></td>
+                    <td>
+                        <span class="badge"
+                              th:classappend="${e.status == 'COMPLETED'} ? 'badge--ok' :
+                                              (${e.status == 'IN_PROGRESS'} ? 'badge--info' : 'badge--muted')"
+                              th:text="${e.statusLabel}"></span>
+                    </td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress__track">
+                                <div class="progress__bar" th:style="'width:' + ${e.progressPercent} + '%'"></div>
+                            </div>
+                            <span class="progress__num" th:text="${e.progressPercent} + '%'">0%</span>
+                        </div>
+                    </td>
+                    <td class="cell-sub" th:text="${e.enrolledAtText}"></td>
+                    <td class="cell-sub" th:text="${e.lastStudiedAtText}"></td>
+                    <td>
+                        <div class="row-actions">
+                            <a th:href="@{/admin/enrollment/edit/{id}(id=${e.id})}">Sửa</a>
+                            <span class="sep">|</span>
+                            <form th:action="@{/admin/enrollment/delete/{id}(id=${e.id})}" method="post"
+                                  style="display:inline;"
+                                  onsubmit="return confirm('Bạn có chắc muốn xóa lượt ghi danh này?');">
+                                <button type="submit" class="btn-link btn-link--danger">Xóa</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="empty" th:if="${enrollments.isEmpty()}">
+            <div class="empty__icon">✓</div>
+            <div class="empty__title"
+                 th:text="${q != null and !q.isEmpty()} ? 'Không tìm thấy lượt ghi danh nào' : 'Chưa có lượt ghi danh nào'">
+            </div>
+            <div th:unless="${q != null and !q.isEmpty()}">Bấm "Ghi danh học viên" để thêm lượt đầu tiên.</div>
+        </div>
+
+        <div th:replace="~{admin/fragments :: phanTrang(${trang}, '/admin/enrollment', ${q})}"></div>
+    </div>
+
+</main>
+</body>
+</html>

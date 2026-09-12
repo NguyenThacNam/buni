@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!--
+  Mảnh giao diện dùng lại ở cả bốn trang danh sách: ô tìm kiếm và thanh phân
+  trang. Gom vào một chỗ để sửa một lần là cả bốn trang cùng đổi.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!--
+  Ô tìm kiếm.
+    baseUrl  đường dẫn trang danh sách, ví dụ /admin/course
+    q        từ khóa hiện tại, để giữ lại trong ô sau khi tìm
+    goiY     chữ mờ gợi ý tìm theo trường nào
+-->
+<form th:fragment="oTimKiem(baseUrl, q, goiY)" th:action="@{${baseUrl}}" method="get" class="search-form">
+    <input type="text" name="q" th:value="${q}" th:placeholder="${goiY}" class="search-input">
+    <button type="submit" class="btn btn--ghost">Tìm</button>
+    <!-- Chỉ hiện nút xóa khi đang thực sự lọc, tránh bày nút vô nghĩa -->
+    <a th:if="${q != null and !q.isEmpty()}" th:href="@{${baseUrl}}" class="btn btn--ghost">Xóa lọc</a>
+</form>
+
+
+<!--
+  Thanh phân trang.
+    trang    đối tượng Page của Spring Data
+    baseUrl  đường dẫn trang danh sách
+    q        từ khóa, phải mang theo mọi liên kết nếu không chuyển trang sẽ mất bộ lọc
+
+  Chỉ hiện khi có nhiều hơn một trang — một trang thì thanh này chỉ tổ rối mắt.
+-->
+<nav th:fragment="phanTrang(trang, baseUrl, q)" class="pager" th:if="${trang.totalPages > 1}">
+
+    <a class="pager__btn" th:classappend="${trang.first} ? 'is-disabled'"
+       th:href="@{${baseUrl}(q=${q}, page=${trang.number - 1})}">‹ Trước</a>
+
+    <span class="pager__info">
+        Trang <b th:text="${trang.number + 1}">1</b> / <span th:text="${trang.totalPages}">1</span>
+    </span>
+
+    <a class="pager__btn" th:classappend="${trang.last} ? 'is-disabled'"
+       th:href="@{${baseUrl}(q=${q}, page=${trang.number + 1})}">Sau ›</a>
+</nav>
+
+
+<!--
+  Dòng chữ nhỏ tóm tắt kết quả, đặt ở góc phải thanh công cụ.
+-->
+<span th:fragment="tomTat(trang, q)" class="cell-sub">
+    <span th:if="${q == null or q.isEmpty()}"
+          th:text="'Tổng ' + ${trang.totalElements} + ' bản ghi'">Tổng 0 bản ghi</span>
+    <span th:if="${q != null and !q.isEmpty()}"
+          th:text="'Tìm thấy ' + ${trang.totalElements} + ' kết quả cho “' + ${q} + '”'">Tìm thấy 0</span>
+</span>
+
+</body>
+</html>

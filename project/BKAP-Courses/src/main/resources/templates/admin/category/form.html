@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{admin/layout :: page(
+            ${category.id != null} ? 'Sửa danh mục' : 'Thêm danh mục',
+            'Danh mục quyết định cách khóa học được nhóm lại ngoài trang chủ', 'category', ~{::main})}">
+<body>
+<main>
+
+    <div class="card">
+        <div class="card__head">
+            <h2 th:text="${category.id != null} ? 'Cập nhật danh mục' : 'Danh mục mới'">Thông tin</h2>
+        </div>
+
+        <div class="card__body">
+            <form th:action="@{/admin/category/save}" th:object="${category}" method="post">
+                <input type="hidden" th:field="*{id}">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Tên danh mục</label>
+                        <input type="text" th:field="*{name}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Slug</label>
+                        <input type="text" th:field="*{slug}" required>
+                        <span class="hint">Dùng trong đường dẫn, chỉ chữ thường và dấu gạch ngang. Không được trùng.</span>
+                    </div>
+
+                    <div class="form-group form-group--full">
+                        <label>Thuộc danh mục</label>
+                        <select th:field="*{parentId}">
+                            <option value="">— Danh mục gốc (không thuộc danh mục nào) —</option>
+                            <option th:each="c : ${chaHopLe}" th:value="${c.id}"
+                                    th:text="${tenDayDu.get(c.id)}"></option>
+                        </select>
+                        <span class="hint">
+                            Ví dụ "Chuyển đổi số cho doanh nghiệp" thuộc "Chuyển đổi số". Danh mục đồng bộ từ LMS
+                            đã được xếp sẵn theo cây bên đó.
+                        </span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Trạng thái</label>
+                        <select th:field="*{status}">
+                            <option value="active">Đang hiện</option>
+                            <option value="inactive">Đang ẩn</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Độ ưu tiên</label>
+                        <input type="number" th:field="*{prioty}" min="0">
+                        <span class="hint">Số nhỏ hơn thì đứng trước.</span>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn--primary">Lưu</button>
+                    <a th:href="@{/admin/category}" class="btn btn--ghost">Hủy</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</main>
+</body>
+</html>

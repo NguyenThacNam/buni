@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{admin/layout :: page('Khóa học', 'Toàn bộ khóa học đang có trên hệ thống', 'course', ~{::main})}">
+<body>
+<main>
+
+    <div class="toolbar">
+        <a th:href="@{/admin/course/create}" class="btn btn--primary">+ Thêm khóa học</a>
+
+        <!-- Kéo khóa học mới từ LMS về. Chỉ thêm cái chưa có, không đụng khóa đã sửa. -->
+        <form th:action="@{/admin/course/sync}" method="post" style="display:inline;"
+              onsubmit="return confirm('Lấy danh mục và khóa học mới từ LMS về? Khóa đã có sẽ không bị thay đổi.');">
+            <button type="submit" class="btn btn--ghost">↻ Đồng bộ từ LMS</button>
+        </form>
+        <div th:replace="~{admin/fragments :: oTimKiem('/admin/course', ${q}, 'Tìm theo tên, slug hoặc danh mục…')}"></div>
+        <div class="toolbar__spacer"></div>
+        <div th:replace="~{admin/fragments :: tomTat(${trang}, ${q})}"></div>
+    </div>
+
+    <div class="card">
+        <div class="table-wrap" th:if="${!courses.isEmpty()}">
+            <table class="data">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Ảnh</th>
+                    <th>Khóa học</th>
+                    <th>Danh mục</th>
+                    <th>Giảng viên</th>
+                    <th>Cấp độ</th>
+                    <th>LMS</th>
+                    <th>Giá</th>
+                    <th class="num">Học viên</th>
+                    <th>Hành động</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="course : ${courses}">
+                    <td th:text="${course.id}"></td>
+                    <td>
+                        <img class="thumb" th:if="${course.thumbnailUrl}"
+                             th:src="${course.thumbnailUrl}" th:alt="${course.title}">
+                        <div class="thumb--empty" th:unless="${course.thumbnailUrl}">n/a</div>
+                    </td>
+                    <td>
+                        <div class="cell-title">
+                            <span th:text="${course.title}"></span>
+                            <span class="badge badge--brand" th:if="${course.isPro != null and course.isPro == 1}">PRO</span>
+                            <span class="badge badge--muted" th:if="${course.status != 'active'}">Đang ẩn</span>
+                        </div>
+                        <div class="cell-sub" th:text="${course.subtitle}"></div>
+                    </td>
+                    <td><span class="badge badge--muted" th:text="${course.category?.name} ?: '—'"></span></td>
+                    <td th:text="${course.instructor?.fullname} ?: '—'"></td>
+                    <td class="cell-sub" th:text="${course.level}"></td>
+                    <td>
+                        <span class="badge badge--ok" th:if="${course.moodleCourseId != null}"
+                              th:text="'#' + ${course.moodleCourseId}"></span>
+                        <span class="badge badge--warn" th:if="${course.moodleCourseId == null}">Chưa nối</span>
+                    </td>
+                    <td>
+                        <span class="badge"
+                              th:classappend="${course.priceType == 'FREE'} ? 'badge--ok' :
+                                              (${course.priceType == 'CONTACT'} ? 'badge--warn' : 'badge--info')"
+                              th:text="${course.priceType == 'FREE'} ? 'Miễn phí' :
+                                       (${course.priceType == 'CONTACT'} ? 'Liên hệ' : 'Trả phí')"></span>
+                        <div class="cell-sub" th:if="${course.priceType == 'PAID'}"
+                             th:text="${#numbers.formatInteger(course.price, 0, 'POINT')} + 'đ'"></div>
+                    </td>
+                    <td class="num" th:text="${course.studentCount}">0</td>
+                    <td>
+                        <div class="row-actions">
+                            <a th:href="@{/admin/course/edit/{id}(id=${course.id})}">Sửa</a>
+                            <span class="sep">|</span>
+                            <!-- Xóa phải đi bằng POST. Nếu để thẻ <a> (GET) thì bất kỳ thứ gì
+                                 duyệt link cũng xóa được: bot tìm kiếm, trình quét bảo mật,
+                                 tính năng tải trước của trình duyệt. Hộp confirm chỉ chặn
+                                 được người thật, không chặn được máy. -->
+                            <form th:action="@{/admin/course/delete/{id}(id=${course.id})}" method="post"
+                                  style="display:inline;"
+                                  onsubmit="return confirm('Bạn có chắc muốn xóa khóa học này?');">
+                                <button type="submit" class="btn-link btn-link--danger">Xóa</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="empty" th:if="${courses.isEmpty()}">
+            <div class="empty__icon">▤</div>
+            <div class="empty__title"
+                 th:text="${q != null and !q.isEmpty()} ? 'Không tìm thấy khóa học nào' : 'Chưa có khóa học nào'">
+            </div>
+            <div th:if="${q != null and !q.isEmpty()}">Thử từ khóa khác, hoặc bấm "Xóa lọc".</div>
+            <div th:unless="${q != null and !q.isEmpty()}">Bấm "Thêm khóa học" để tạo khóa đầu tiên.</div>
+        </div>
+
+        <div th:replace="~{admin/fragments :: phanTrang(${trang}, '/admin/course', ${q})}"></div>
+    </div>
+
+</main>
+</body>
+</html>

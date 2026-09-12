@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<!--
+  Khung dùng chung cho mọi trang admin: sidebar, thanh tiêu đề, vùng thông báo.
+
+  Trước đây bốn trang admin mỗi trang tự viết <style> riêng và tự chép lại thanh
+  điều hướng, còn hai trang form thì quên hẳn nav nên vào là mất lối về. Gom hết
+  vào một chỗ để sửa một lần là mọi trang cùng đổi.
+
+  Cách dùng ở trang con:
+      <html th:replace="~{admin/layout :: page('Tiêu đề', 'Mô tả', 'course', ~{::main})}">
+      <body><main> ...nội dung... </main></body></html>
+
+  Tham số:
+      pageTitle  tiêu đề lớn trên thanh đầu trang
+      pageSub    dòng mô tả nhỏ bên dưới
+      active     khóa của mục sidebar đang mở: dashboard | course | category | user | enrollment
+      content    fragment nội dung, thường truyền ~{::main}
+-->
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="page(pageTitle, pageSub, active, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="'BKAP Admin · ' + ${pageTitle}">BKAP Admin</title>
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body>
+<div class="layout">
+
+    <aside class="sidebar">
+        <div class="sidebar__brand">
+            <b>BKAP ADMIN</b>
+            <span>Bachkhoa Education</span>
+        </div>
+
+        <nav class="sidebar__nav">
+            <div class="sidebar__label">Quản lý</div>
+
+            <a th:href="@{/admin}" class="sidebar__link"
+               th:classappend="${active == 'dashboard'} ? 'is-active'">
+                <span class="ico">▦</span> Tổng quan
+            </a>
+            <a th:href="@{/admin/course}" class="sidebar__link"
+               th:classappend="${active == 'course'} ? 'is-active'">
+                <span class="ico">▤</span> Khóa học
+            </a>
+            <a th:href="@{/admin/category}" class="sidebar__link"
+               th:classappend="${active == 'category'} ? 'is-active'">
+                <span class="ico">◈</span> Danh mục
+            </a>
+            <a th:href="@{/admin/user}" class="sidebar__link"
+               th:classappend="${active == 'user'} ? 'is-active'">
+                <span class="ico">◉</span> Người dùng
+            </a>
+            <a th:href="@{/admin/enrollment}" class="sidebar__link"
+               th:classappend="${active == 'enrollment'} ? 'is-active'">
+                <span class="ico">✓</span> Ghi danh
+            </a>
+
+            <div class="sidebar__label">Liên kết</div>
+            <a th:href="@{/}" class="sidebar__link" target="_blank">
+                <span class="ico">↗</span> Trang người dùng
+            </a>
+            <a href="https://lms.buni.vn" class="sidebar__link" target="_blank" rel="noopener">
+                <span class="ico">↗</span> Hệ thống LMS
+            </a>
+        </nav>
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <div>
+                <h1 th:text="${pageTitle}">Tiêu đề</h1>
+                <div class="sub" th:if="${pageSub}" th:text="${pageSub}">Mô tả</div>
+            </div>
+
+            <!-- #authentication do thymeleaf-extras-springsecurity6 cung cấp (đã có
+                 sẵn trong pom.xml). Đăng xuất phải gửi bằng POST vì chuỗi bảo mật
+                 khu admin có bật CSRF. -->
+            <div class="topbar__user" th:if="${#authentication != null and #authentication.name != 'anonymousUser'}">
+                <span class="topbar__who" th:text="${#authentication.name}">admin</span>
+                <form th:action="@{/admin/logout}" method="post" style="display:inline;">
+                    <button type="submit" class="btn btn--ghost btn--sm">Đăng xuất</button>
+                </form>
+            </div>
+        </header>
+
+        <main class="content">
+            <!-- Thông báo sau khi lưu/xóa, do controller đẩy sang bằng RedirectAttributes -->
+            <div class="alert alert--ok" th:if="${flashOk}">
+                <span>✓</span><span th:text="${flashOk}"></span>
+            </div>
+            <div class="alert alert--danger" th:if="${flashErr}">
+                <span>✕</span><span th:text="${flashErr}"></span>
+            </div>
+            <div class="alert alert--warn" th:if="${flashWarn}">
+                <span>!</span><span th:text="${flashWarn}"></span>
+            </div>
+
+            <div th:replace="${content}">Nội dung trang con</div>
+        </main>
+    </div>
+
+</div>
+</body>
+</html>
