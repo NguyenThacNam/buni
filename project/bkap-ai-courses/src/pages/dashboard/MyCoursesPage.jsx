@@ -196,8 +196,9 @@ export default function MyCoursesPage() {
                     {course.title}
                   </h3>
 
-                  {/* Tiến độ do trung tâm cập nhật ở trang quản trị. */}
-                  <div className="mt-1">
+                  {/* Tiến độ sẽ lấy từ completion bên LMS ở bước sau. Chưa có thì
+                      ẩn hẳn thanh tiến độ, hiện 0% cho mọi khóa là sai sự thật. */}
+                  <div className="mt-1" hidden={course.progressPercent == null}>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-xs text-gray-500">Tiến độ</span>
                       <span className="text-xs font-bold text-red-600">{tienDo}%</span>
@@ -214,8 +215,10 @@ export default function MyCoursesPage() {
                   </div>
 
                   <div className="flex items-center justify-between mt-1">
+                    {/* Ngày ghi danh do LMS quản lý và chưa trả về trong danh sách
+                        khóa — không có thì bỏ trống hẳn, đừng hiện nhãn cụt. */}
                     <span className="text-xs text-gray-400">
-                      Ghi danh ngày {doiNgay(course.enrolledAt)}
+                      {course.enrolledAt ? `Ghi danh ngày ${doiNgay(course.enrolledAt)}` : ""}
                     </span>
                     {course.coNoiDung ? (
                       <Link

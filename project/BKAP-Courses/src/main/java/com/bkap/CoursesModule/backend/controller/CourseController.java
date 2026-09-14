@@ -1,130 +1,67 @@
 package com.bkap.CoursesModule.backend.controller;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize; // ← THÊM import
 import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.bkap.CoursesModule.backend.service.ICourseService;
-import com.bkap.CoursesModule.dto.CourseDTO;
-import com.bkap.CoursesModule.entity.Course;
+import com.bkap.CoursesModule.backend.service.LmsCatalogService;
 
+/**
+ * Khóa học cho trang công khai — đọc từ LMS.
+ *
+ * Các endpoint thêm/sửa/xóa khóa học đã bỏ cùng với trang quản trị: khóa học
+ * nay tạo và sửa bên lms.buni.vn, buni chỉ hiển thị. Xem lịch sử git (nhánh
+ * main, trước khi chuyển sang LMS) nếu cần đọc lại mã cũ.
+ */
 @RestController
 @RequestMapping("/api/v1/courses")
 @CrossOrigin(origins = "*")
 public class CourseController {
 
 	@Autowired
-	private ICourseService courseService;
+	private LmsCatalogService lmsCatalogService;
 
-	// GET tất cả — ai cũng xem được
 	@GetMapping()
 	public ResponseEntity<?> getAllCourses() {
 		try {
-			// Chỉ trả khóa đang hiện. Khóa vừa đồng bộ từ LMS về còn ẩn, chưa có giá
-			// và chưa phân loại đúng — lọt ra trang khách là nham nhở.
-			List<Course> list = courseService.getPublicCourses();
-			return ResponseEntity.status(200).body(list);
+			return ResponseEntity.ok(lmsCatalogService.danhSachKhoa());
 		} catch (Exception e) {
-			return ResponseEntity.status(500).body("Lỗi hệ thống khi lấy danh sách: " + e.getMessage());
+			return loi("danh sách khóa học", e);
 		}
 	}
 
-	// GET theo category — ai cũng xem được
+	/** Gồm cả khóa của các danh mục con — xem LmsCatalogService. */
 	@GetMapping("/category/{slug}")
 	public ResponseEntity<?> getCoursesByCategory(@PathVariable String slug) {
 		try {
-			List<Course> list = courseService.getPublicCoursesByCategory(slug);
-			return ResponseEntity.status(200).body(list);
+			return ResponseEntity.ok(lmsCatalogService.khoaTheoDanhMuc(slug));
 		} catch (Exception e) {
-			return ResponseEntity.status(500).body("Lỗi hệ thống khi lọc danh mục: " + e.getMessage());
+			return loi("khóa học theo danh mục " + slug, e);
 		}
 	}
 
-	// GET chi tiết — ai cũng xem được
+	/** id là id khóa học BÊN LMS, vì buni không còn bảng khóa học riêng. */
 	@GetMapping("/{id}")
-	public ResponseEntity<?> getCourseById(@PathVariable Short id) {
+	public ResponseEntity<?> getCourseById(@PathVariable Integer id) {
 		try {
-			Course course = courseService.getCourseById(id);
-			return ResponseEntity.status(200).body(course);
-		} catch (Exception e) {
-			return ResponseEntity.status(404).body("Không tìm thấy khóa học với ID: " + id);
-		}
-	}
-
-	// POST tạo mới — CHỈ ADMIN
-	@PostMapping()
-	@PreAuthorize("hasRole('ADMIN')") // ← THÊM MỚI
-	public ResponseEntity<?> createCourse(@RequestBody CourseDTO courseDTO) {
-		try {
-			Course newCourse = courseService.createCourse(courseDTO);
-
-			Map<String, Object> courseData = new HashMap<>();
-			courseData.put("id", newCourse.getId());
-			courseData.put("title", newCourse.getTitle());
-			courseData.put("slug", newCourse.getSlug());
-			courseData.put("subtitle", newCourse.getSubtitle());
-			courseData.put("price", newCourse.getPrice());
-			courseData.put("isPro", newCourse.getIsPro());
-			courseData.put("category", newCourse.getCategory() != null ? newCourse.getCategory().getName() : null);
-			courseData.put("instructor",
-					newCourse.getInstructor() != null ? newCourse.getInstructor().getFullname() : null);
-
-			if (newCourse.getCreatedAt() != null) {
-				String formattedDate = java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy")
-						.format(newCourse.getCreatedAt());
-				courseData.put("created_date", formattedDate);
+			Map<String, Object> course = lmsCatalogService.chiTietKhoa(id);
+			if (course == null) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy khóa học " + id));
 			}
-			courseData.put("status", true);
-
-			Map<String, Object> response = new HashMap<>();
-			response.put("course", courseData);
-			response.put("message", "Tạo khóa học mới thành công!");
-
-			return ResponseEntity.status(201).body(response);
+			return ResponseEntity.ok(course);
 		} catch (Exception e) {
-			return ResponseEntity.status(500).body("Lỗi hệ thống khi tạo khóa học: " + e.getMessage());
+			return loi("khóa học " + id, e);
 		}
 	}
 
-	// PUT cập nhật — CHỈ ADMIN
-	@PutMapping("/{id}")
-	@PreAuthorize("hasRole('ADMIN')") // ← THÊM MỚI
-	public ResponseEntity<?> updateCourse(@PathVariable Short id, @RequestBody CourseDTO courseDTO) {
-		try {
-			Course updatedCourse = courseService.updateCourse(id, courseDTO);
-
-			Map<String, Object> response = new HashMap<>();
-			response.put("course", updatedCourse);
-			response.put("message", "Cập nhật khóa học thành công!");
-
-			return ResponseEntity.status(200).body(response);
-		} catch (Exception e) {
-			return ResponseEntity.status(500).body("Lỗi hệ thống khi cập nhật: " + e.getMessage());
-		}
-	}
-
-	// DELETE xóa — CHỈ ADMIN
-	@DeleteMapping("/{id}")
-	@PreAuthorize("hasRole('ADMIN')") // ← THÊM MỚI
-	public ResponseEntity<?> deleteCourse(@PathVariable Short id) {
-		try {
-			courseService.deleteCourse(id);
-			return ResponseEntity.status(200).body("Xóa khóa học thành công!");
-		} catch (Exception e) {
-			return ResponseEntity.status(500).body("Lỗi hệ thống khi xóa khóa học: " + e.getMessage());
-		}
+	private ResponseEntity<?> loi(String dangLay, Exception e) {
+		System.err.println("[Course] Không lấy được " + dangLay + ": " + e.getMessage());
+		return ResponseEntity.status(502).body(Map.of("error", "Chưa lấy được dữ liệu từ hệ thống LMS."));
 	}
 }

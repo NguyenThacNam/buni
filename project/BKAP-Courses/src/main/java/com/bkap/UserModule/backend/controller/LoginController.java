@@ -1,6 +1,7 @@
 package com.bkap.UserModule.backend.controller;
 
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -12,72 +13,70 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.bkap.UserModule.backend.service.IRefreshTokenService;
-import com.bkap.UserModule.backend.service.IUserService;
+import com.bkap.UserModule.backend.service.MoodleAuthService;
+import com.bkap.UserModule.backend.service.MoodleAuthService.NguoiDungLms;
 import com.bkap.UserModule.dto.LoginRequest;
-import com.bkap.UserModule.entity.User;
 import com.bkap.config.JwtUtil;
 
+/**
+ * Đăng nhập bằng tài khoản LMS.
+ *
+ * Trước đây đối chiếu mật khẩu băng BCrypt với bảng users của buni. Giờ hỏi
+ * thẳng Moodle: một nơi giữ tài khoản, một nơi giữ mật khẩu, buni chỉ cấp vé đi
+ * lại trong phạm vi của mình.
+ *
+ * Hình dạng phản hồi giữ nguyên như cũ (user, token, refreshToken) để frontend
+ * không phải sửa.
+ */
 @RestController
 @RequestMapping("api/v1/login")
 @CrossOrigin("*")
 public class LoginController {
 
 	@Autowired
-	private IUserService userService;
+	private MoodleAuthService moodleAuthService;
 
 	@Autowired
 	private JwtUtil jwtUtil;
 
-	@Autowired
-	private IRefreshTokenService refreshTokenService;
-
 	@PostMapping()
 	public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+		NguoiDungLms nguoiDung;
 		try {
-			User user = userService.login(request.getUsername(), request.getPassword());
-
-			if (user == null) {
-				return ResponseEntity.status(401).body("Username hoặc mật khẩu không đúng!");
-			}
-
-			// Lấy last_login cũ từ DB trước khi cập nhật
-			String lastLogin = "Chưa có lần đăng nhập trước"; // Default nếu lần đầu login
-			if (user.getLastLogin() != null) {
-				lastLogin = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(user.getLastLogin());
-			}
-
-			// Sau đó mới cập nhật last_login mới vào DB
-			userService.updateLastLogin(request.getUsername());
-
-			// ← Tạo JWT token
-			String token = jwtUtil.generateToken(user.getUsername(), user.getRole().name());
-
-			// Format createDate
-			String createDate = new SimpleDateFormat("dd-MM-yyyy").format(user.getCreateDate());
-
-			// Build response với thông tin cũ
-			Map<String, Object> userInfo = new HashMap<>();
-			userInfo.put("name", user.getFullname());
-			userInfo.put("email", user.getEmail());
-			userInfo.put("username", user.getUsername());
-			userInfo.put("phone", user.getPhone());
-			userInfo.put("birthday", user.getBirthday());
-			userInfo.put("last_login", lastLogin);
-			userInfo.put("createDate", createDate);
-			userInfo.put("status", true);
-
-			Map<String, Object> response = new HashMap<>();
-			response.put("user", userInfo);
-			response.put("token", token);
-			// Access token trên chỉ sống 15 phút. Kèm thêm refresh token để frontend
-			// tự xin token mới khi hết hạn, khỏi bắt đăng nhập lại.
-			response.put("refreshToken", refreshTokenService.cap(user));
-
-			return ResponseEntity.status(200).body(response);
-
+			nguoiDung = moodleAuthService.dangNhap(request.getUsername(), request.getPassword());
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.status(401).body(Map.of("error", e.getMessage()));
 		} catch (Exception e) {
-			return ResponseEntity.status(500).body("Lỗi hệ thống: " + e.getMessage());
+			System.err.println("[Login] Không hỏi được LMS: " + e.getMessage());
+			return ResponseEntity.status(502)
+					.body(Map.of("error", "Chưa kết nối được hệ thống LMS. Vui lòng thử lại sau."));
 		}
+
+		// Vai trò lấy từ LMS: ai là quản trị bên đó thì là quản trị ở đây.
+		String vaiTro = nguoiDung.laAdmin() ? "ADMIN" : "STUDENT";
+
+		Map<String, Object> thongTin = new HashMap<>();
+		thongTin.put("name", nguoiDung.hoTen());
+		thongTin.put("email", nguoiDung.email());
+		thongTin.put("username", nguoiDung.username());
+		thongTin.put("last_login", doiNgayGio(nguoiDung.lanTruyCapCuoi()));
+		thongTin.put("createDate", doiNgay(nguoiDung.lanTruyCapDau()));
+		thongTin.put("status", true);
+
+		Map<String, Object> phanHoi = new HashMap<>();
+		phanHoi.put("user", thongTin);
+		phanHoi.put("token", jwtUtil.generateToken(nguoiDung.username(), vaiTro));
+		phanHoi.put("refreshToken", jwtUtil.taoRefreshToken(nguoiDung.username(), nguoiDung.laAdmin()));
+		return ResponseEntity.ok(phanHoi);
+	}
+
+	/** Moodle trả thời gian dạng số giây; 0 nghĩa là chưa từng. */
+	private String doiNgayGio(long giay) {
+		return giay <= 0 ? "Chưa có lần đăng nhập trước"
+				: new SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(new Date(giay * 1000));
+	}
+
+	private String doiNgay(long giay) {
+		return giay <= 0 ? "" : new SimpleDateFormat("dd-MM-yyyy").format(new Date(giay * 1000));
 	}
 }

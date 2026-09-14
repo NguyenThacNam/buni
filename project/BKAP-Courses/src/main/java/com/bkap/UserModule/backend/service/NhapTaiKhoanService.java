@@ -4,10 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.security.SecureRandom;
 import java.text.Normalizer;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,7 +16,6 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -30,50 +25,53 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.bkap.CoursesModule.backend.service.IEnrollmentService;
 import com.bkap.CoursesModule.backend.service.LmsSsoService;
-import com.bkap.CoursesModule.entity.Course;
-import com.bkap.CoursesModule.entity.Enrollment;
-import com.bkap.UserModule.entity.User;
-import com.bkap.UserModule.entity.UserRole;
+import com.bkap.UserModule.dto.MoodleUserRequest;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Nhập tài khoản học viên hàng loạt từ file Excel.
+ * Nhập tài khoản học viên hàng loạt từ Excel — tạo thẳng trên LMS.
  *
- * Trung tâm cấp tài khoản cho cả lớp một lượt thay vì gõ tay từng người. Mỗi
- * dòng được xử lý độc lập: dòng lỗi thì bỏ qua kèm lý do, dòng đúng vẫn được
- * tạo — admin sửa mấy dòng lỗi rồi nhập lại cả file cũng không sao, vì tài
- * khoản đã có sẽ được nhận ra và bỏ qua.
+ * Đây là trang quản trị DUY NHẤT còn lại của buni. Lý do giữ: Moodle không có
+ * sẵn cách nhập một danh sách lớp kèm ghi danh chỉ bằng một file, còn trung tâm
+ * thì mỗi khóa lại nhập một lớp mới.
+ *
+ * Khác bản cũ ở chỗ không còn ghi vào CSDL buni: tài khoản tạo bên Moodle, ghi
+ * danh cũng bên Moodle. buni chỉ đọc file, kiểm tra dữ liệu và gọi API.
  */
 @Service
 public class NhapTaiKhoanService {
 
 	/** Tiêu đề cột trong file mẫu, theo đúng thứ tự. */
-	public static final String[] TIEU_DE = { "Tên đăng nhập", "Họ tên", "Email", "Số điện thoại", "Ngày sinh",
+	public static final String[] TIEU_DE = { "Tên đăng nhập", "Họ tên", "Email", "Số điện thoại (tùy chọn)",
 			"Mật khẩu (để trống = tự sinh)" };
 
 	private static final Pattern TEN_DANG_NHAP = Pattern.compile("^[a-z0-9._-]{3,50}$");
 	private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
-	private static final Pattern SO_DIEN_THOAI = Pattern.compile("^0\\d{9}$");
 
-	/** Bỏ chữ dễ nhầm (0/O, 1/l/I) để học viên đọc từ giấy in không gõ sai. */
-	private static final String BANG_CHU = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-	private static final int DO_DAI_MAT_KHAU_TU_SINH = 8;
-	private static final int DO_DAI_MAT_KHAU_TOI_THIEU = 6;
-
-	private static final DateTimeFormatter DINH_DANG_LUU = DateTimeFormatter.ISO_LOCAL_DATE; // 2000-01-31
+	/**
+	 * Mật khẩu tự sinh phải qua được chính sách mặc định của Moodle: tối thiểu 8
+	 * ký tự, có đủ chữ thường, chữ hoa, chữ số và một ký tự đặc biệt.
+	 */
+	private static final String CHU_THUONG = "abcdefghjkmnpqrstuvwxyz";
+	private static final String CHU_HOA = "ABCDEFGHJKMNPQRSTUVWXYZ";
+	private static final String CHU_SO = "23456789";
+	private static final String DAC_BIET = "@#$%&*";
+	private static final int DO_DAI_MAT_KHAU_TOI_THIEU = 8;
 
 	@Autowired
-	private IUserService userService;
+	private IMoodleService moodleService;
 
 	@Autowired
-	private IEnrollmentService enrollmentService;
+	private MoodleAuthService moodleAuthService;
 
 	@Autowired
 	private LmsSsoService lmsSsoService;
 
 	private final SecureRandom ngauNhien = new SecureRandom();
 	private final DataFormatter dinhDangO = new DataFormatter();
+	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	// ─────────────────────────────────────────────────────────────
 	// KẾT QUẢ
@@ -85,7 +83,7 @@ public class NhapTaiKhoanService {
 
 	/** Kết quả xử lý một dòng trong file. */
 	public static class DongKetQua implements java.io.Serializable {
-		private static final long serialVersionUID = 1L;
+		private static final long serialVersionUID = 2L;
 
 		public int soDong;
 		public String tenDangNhap = "";
@@ -108,28 +106,28 @@ public class NhapTaiKhoanService {
 	// ─────────────────────────────────────────────────────────────
 
 	/**
-	 * @param khoaGhiDanh không bắt buộc — có thì ghi danh luôn cả lớp vào khóa này,
-	 *                    kể cả những tài khoản đã có sẵn
+	 * @param moodleCourseId khóa để ghi danh cả lớp vào, hoặc null nếu chỉ tạo tài
+	 *                       khoản
 	 * @throws IllegalArgumentException khi cả file hỏng (không phải Excel, thiếu
 	 *                                  cột bắt buộc), kèm câu báo cho admin
 	 */
-	public List<DongKetQua> nhap(InputStream file, Course khoaGhiDanh) throws Exception {
+	public List<DongKetQua> nhap(InputStream file, Integer moodleCourseId) throws Exception {
 		List<DongKetQua> ketQua = new ArrayList<>();
 
 		try (Workbook wb = moFile(file)) {
 			Sheet sheet = wb.getSheetAt(0);
 			Map<String, Integer> cot = docTieuDe(sheet.getRow(sheet.getFirstRowNum()));
 
-			// Trùng TRONG CHÍNH file: CSDL chưa có nên kiểm tra CSDL không bắt được,
-			// để lọt thì dòng sau hỏng vì ràng buộc UNIQUE mà báo lỗi khó hiểu.
-			Set<String> tenDaGap = new HashSet<>(), emailDaGap = new HashSet<>(), sdtDaGap = new HashSet<>();
+			// Trùng TRONG CHÍNH file: bên LMS chưa có nên hỏi LMS không bắt được,
+			// để lọt thì dòng sau bị Moodle từ chối với câu báo khó hiểu.
+			Set<String> tenDaGap = new HashSet<>(), emailDaGap = new HashSet<>();
 
 			for (int r = sheet.getFirstRowNum() + 1; r <= sheet.getLastRowNum(); r++) {
 				Row row = sheet.getRow(r);
 				if (dongTrong(row)) {
 					continue;
 				}
-				ketQua.add(xuLyDong(row, r + 1, cot, khoaGhiDanh, tenDaGap, emailDaGap, sdtDaGap));
+				ketQua.add(xuLyDong(row, r + 1, cot, moodleCourseId, tenDaGap, emailDaGap));
 			}
 		}
 
@@ -149,8 +147,8 @@ public class NhapTaiKhoanService {
 	}
 
 	/**
-	 * Nhận cột theo TÊN tiêu đề chứ không theo vị trí, để admin đổi thứ tự cột
-	 * hay chèn thêm cột ghi chú riêng mà vẫn nhập được.
+	 * Nhận cột theo TÊN tiêu đề chứ không theo vị trí, để admin đổi thứ tự cột hay
+	 * chèn thêm cột ghi chú riêng mà vẫn nhập được.
 	 */
 	private Map<String, Integer> docTieuDe(Row tieuDe) {
 		if (tieuDe == null) {
@@ -168,8 +166,6 @@ public class NhapTaiKhoanService {
 				khoa = "email";
 			} else if (ten.contains("dien thoai") || ten.equals("sdt") || ten.equals("phone")) {
 				khoa = "sdt";
-			} else if (ten.contains("ngay sinh") || ten.equals("birthday")) {
-				khoa = "ngaysinh";
 			} else if (ten.contains("mat khau") || ten.equals("password")) {
 				khoa = "matkhau";
 			}
@@ -182,8 +178,6 @@ public class NhapTaiKhoanService {
 		if (!cot.containsKey("ten")) thieu.add("Tên đăng nhập");
 		if (!cot.containsKey("hoten")) thieu.add("Họ tên");
 		if (!cot.containsKey("email")) thieu.add("Email");
-		if (!cot.containsKey("sdt")) thieu.add("Số điện thoại");
-		if (!cot.containsKey("ngaysinh")) thieu.add("Ngày sinh");
 		if (!thieu.isEmpty()) {
 			throw new IllegalArgumentException("Dòng đầu tiên của file thiếu cột: " + String.join(", ", thieu)
 					+ ". Hãy tải file mẫu về và điền theo đúng các cột trong đó.");
@@ -191,86 +185,90 @@ public class NhapTaiKhoanService {
 		return cot;
 	}
 
-	private DongKetQua xuLyDong(Row row, int soDong, Map<String, Integer> cot, Course khoaGhiDanh,
-			Set<String> tenDaGap, Set<String> emailDaGap, Set<String> sdtDaGap) {
+	private DongKetQua xuLyDong(Row row, int soDong, Map<String, Integer> cot, Integer moodleCourseId,
+			Set<String> tenDaGap, Set<String> emailDaGap) {
 		DongKetQua kq = new DongKetQua();
 		kq.soDong = soDong;
 
-		// Moodle bắt tên đăng nhập viết thường; chuẩn hóa ngay từ đầu để hai bên khớp.
+		// Moodle bắt tên đăng nhập viết thường.
 		String ten = docChu(row, cot.get("ten")).toLowerCase();
 		String hoTen = docChu(row, cot.get("hoten"));
 		String email = docChu(row, cot.get("email")).toLowerCase();
 		String sdt = docSoDienThoai(row, cot.get("sdt"));
-		String ngaySinh = docNgay(row, cot.get("ngaysinh"));
 		String matKhau = cot.containsKey("matkhau") ? docChu(row, cot.get("matkhau")) : "";
 
 		kq.tenDangNhap = ten;
 		kq.hoTen = hoTen;
 
-		// Trùng trong file phải bắt TRƯỚC khi hỏi CSDL. Nếu hỏi CSDL trước thì dòng
-		// đầu vừa tạo tài khoản xong, dòng lặp lại bên dưới lại thấy "đã có sẵn" —
-		// báo sai bản chất, và admin không biết file mình có dòng trùng.
+		// Trùng trong file phải bắt TRƯỚC khi hỏi LMS: dòng đầu vừa tạo xong thì
+		// dòng lặp lại bên dưới sẽ thấy "đã có sẵn", báo sai bản chất.
 		if (!ten.isEmpty() && tenDaGap.contains(ten)) {
 			kq.trangThai = TrangThai.LOI;
 			kq.ghiChu = "Tên đăng nhập bị lặp lại trong file (trùng một dòng phía trên).";
 			return kq;
 		}
 
-		// Tài khoản đã có: không tạo lại, không đụng tới thông tin cũ. Vẫn ghi danh
-		// nếu admin chọn khóa — dùng khi đưa một lớp cũ vào khóa mới.
-		if (!ten.isEmpty() && userService.existsByUsername(ten)) {
-			kq.trangThai = TrangThai.DA_CO;
-			kq.ghiChu = "Tài khoản đã có sẵn, giữ nguyên thông tin cũ.";
-			tenDaGap.add(ten);
-			ghiDanhNeuCan(userService.findByUsername(ten), khoaGhiDanh, kq);
-			return kq;
-		}
-
-		String loi = kiemTra(ten, hoTen, email, sdt, ngaySinh, matKhau, tenDaGap, emailDaGap, sdtDaGap);
-		if (loi != null) {
-			kq.trangThai = TrangThai.LOI;
-			kq.ghiChu = loi;
-			return kq;
-		}
-		tenDaGap.add(ten);
-		emailDaGap.add(email);
-		sdtDaGap.add(sdt);
-
-		boolean tuSinh = matKhau.isEmpty();
-		if (tuSinh) {
-			matKhau = sinhMatKhau();
-		}
-
-		User user = new User();
-		user.setUsername(ten);
-		user.setFullname(hoTen);
-		user.setEmail(email);
-		user.setPhone(sdt);
-		user.setBirthday(ngaySinh);
-		user.setRole(UserRole.STUDENT);
-
 		try {
-			user = userService.saveFromAdmin(user, matKhau);
+			// Tài khoản đã có bên LMS: không tạo lại, không đụng thông tin cũ.
+			// Vẫn ghi danh nếu admin chọn khóa — dùng khi đưa một lớp cũ vào khóa mới.
+			JsonNode daCo = moodleAuthService.timTheoTenDangNhap(ten.isEmpty() ? "___" : ten);
+			if (daCo != null) {
+				kq.trangThai = TrangThai.DA_CO;
+				kq.ghiChu = "Tài khoản đã có trên LMS, giữ nguyên thông tin cũ.";
+				tenDaGap.add(ten);
+				ghiDanhNeuCan(daCo.path("id").asInt(), moodleCourseId, kq);
+				return kq;
+			}
+
+			String loi = kiemTra(ten, hoTen, email, matKhau, tenDaGap, emailDaGap);
+			if (loi != null) {
+				kq.trangThai = TrangThai.LOI;
+				kq.ghiChu = loi;
+				return kq;
+			}
+			tenDaGap.add(ten);
+			emailDaGap.add(email);
+
+			boolean tuSinh = matKhau.isEmpty();
+			if (tuSinh) {
+				matKhau = sinhMatKhau();
+			}
+
+			MoodleUserRequest dto = new MoodleUserRequest();
+			dto.setUsername(ten);
+			dto.setEmail(email);
+			dto.setPassword(matKhau);
+			dto.setPhone(sdt);
+			datHoTen(dto, hoTen, ten);
+
+			String phanHoi = moodleService.createMoodleUser(dto);
+			JsonNode taoMoi = objectMapper.readTree(phanHoi == null ? "[]" : phanHoi);
+			if (!taoMoi.isArray() || taoMoi.size() == 0) {
+				kq.trangThai = TrangThai.LOI;
+				kq.ghiChu = "LMS từ chối tạo tài khoản. Thường gặp nhất là email đã có người khác dùng; "
+						+ "ngoài ra có thể do mật khẩu trong file không đạt chính sách của LMS.";
+				return kq;
+			}
+
+			kq.trangThai = TrangThai.DA_TAO;
+			kq.matKhauTuSinh = tuSinh ? matKhau : null;
+			kq.ghiChu = tuSinh ? "Đã tạo trên LMS, mật khẩu do hệ thống sinh."
+					: "Đã tạo trên LMS, dùng mật khẩu trong file.";
+			ghiDanhNeuCan(taoMoi.get(0).path("id").asInt(), moodleCourseId, kq);
+
 		} catch (Exception e) {
 			kq.trangThai = TrangThai.LOI;
-			kq.ghiChu = "Không lưu được (có thể trùng tên đăng nhập, email hoặc số điện thoại).";
-			return kq;
+			kq.ghiChu = "Lỗi khi gọi LMS: " + e.getMessage();
 		}
-
-		kq.trangThai = TrangThai.DA_TAO;
-		kq.matKhauTuSinh = tuSinh ? matKhau : null;
-		kq.ghiChu = tuSinh ? "Đã tạo, mật khẩu do hệ thống sinh." : "Đã tạo, dùng mật khẩu trong file.";
-		ghiDanhNeuCan(user, khoaGhiDanh, kq);
 		return kq;
 	}
 
 	/** Trả về câu báo lỗi đầu tiên gặp phải, hoặc null nếu dòng hợp lệ. */
-	private String kiemTra(String ten, String hoTen, String email, String sdt, String ngaySinh, String matKhau,
-			Set<String> tenDaGap, Set<String> emailDaGap, Set<String> sdtDaGap) {
+	private String kiemTra(String ten, String hoTen, String email, String matKhau, Set<String> tenDaGap,
+			Set<String> emailDaGap) throws Exception {
 		if (ten.isEmpty()) return "Thiếu tên đăng nhập.";
 		if (!TEN_DANG_NHAP.matcher(ten).matches())
 			return "Tên đăng nhập chỉ được dùng chữ thường không dấu, số và . _ - (3–50 ký tự).";
-		if (tenDaGap.contains(ten)) return "Tên đăng nhập bị lặp lại trong file.";
 
 		if (hoTen.isEmpty()) return "Thiếu họ tên.";
 		if (hoTen.length() > 100) return "Họ tên dài quá 100 ký tự.";
@@ -278,51 +276,28 @@ public class NhapTaiKhoanService {
 		if (email.isEmpty()) return "Thiếu email.";
 		if (!EMAIL.matcher(email).matches() || email.length() > 150) return "Email không hợp lệ.";
 		if (emailDaGap.contains(email)) return "Email bị lặp lại trong file.";
-		if (userService.existsByEmail(email)) return "Email đã được tài khoản khác sử dụng.";
-
-		if (sdt.isEmpty()) return "Thiếu số điện thoại.";
-		if (!SO_DIEN_THOAI.matcher(sdt).matches()) return "Số điện thoại phải gồm 10 chữ số, bắt đầu bằng 0.";
-		if (sdtDaGap.contains(sdt)) return "Số điện thoại bị lặp lại trong file.";
-		if (userService.existsByPhone(sdt)) return "Số điện thoại đã được tài khoản khác sử dụng.";
-
-		if (ngaySinh == null) return "Ngày sinh trống hoặc sai định dạng (dùng dd/mm/yyyy).";
+		// Moodle bắt email không trùng giữa các tài khoản.
+		//
+		// Phép kiểm này chỉ chạy được khi tài khoản dịch vụ được phép XEM email của
+		// người dùng. Chưa mở quyền đó thì Moodle trả danh sách rỗng cho mọi email,
+		// và dòng trùng sẽ bị bắt muộn hơn — lúc tạo, với câu báo chung chung hơn.
+		if (moodleAuthService.timTheoEmail(email) != null) return "Email đã có tài khoản khác dùng trên LMS.";
 
 		if (!matKhau.isEmpty() && matKhau.length() < DO_DAI_MAT_KHAU_TOI_THIEU)
 			return "Mật khẩu trong file phải có ít nhất " + DO_DAI_MAT_KHAU_TOI_THIEU + " ký tự (hoặc để trống).";
 		return null;
 	}
 
-	/**
-	 * Ghi danh vào khóa đã chọn, rồi đẩy sang LMS. LMS lỗi không làm hỏng dòng:
-	 * tài khoản và ghi danh bên buni vẫn giữ, lần đầu học viên bấm bài kiểm tra hệ
-	 * thống sẽ tự ghi danh bù.
-	 */
-	private void ghiDanhNeuCan(User user, Course khoa, DongKetQua kq) {
-		if (khoa == null || user == null) {
-			return;
-		}
-
-		if (!enrollmentService.daGhiDanh(user.getUsername(), khoa.getId())) {
-			Enrollment e = new Enrollment();
-			e.setUser(user);
-			e.setCourse(khoa);
-			try {
-				enrollmentService.save(e);
-			} catch (Exception ex) {
-				kq.ghiChu += " Chưa ghi danh được vào khóa.";
-				return;
-			}
-		}
-
-		if (khoa.getMoodleCourseId() == null) {
-			kq.ghiChu += " Đã ghi danh (khóa chưa nối LMS).";
+	/** Ghi danh vào khóa đã chọn. Hỏng thì ghi chú lại, không làm hỏng cả dòng. */
+	private void ghiDanhNeuCan(int moodleUserId, Integer moodleCourseId, DongKetQua kq) {
+		if (moodleCourseId == null || moodleUserId <= 0) {
 			return;
 		}
 		try {
-			lmsSsoService.ghiDanhBenLms(user, khoa);
-			kq.ghiChu += " Đã ghi danh, cả bên LMS.";
-		} catch (Exception ex) {
-			kq.ghiChu += " Đã ghi danh bên buni, CHƯA đẩy được sang LMS (" + ex.getMessage() + ").";
+			lmsSsoService.ghiDanhBenLms(moodleUserId, moodleCourseId);
+			kq.ghiChu += " Đã ghi danh vào khóa.";
+		} catch (Exception e) {
+			kq.ghiChu += " CHƯA ghi danh được vào khóa (" + e.getMessage() + ").";
 		}
 	}
 
@@ -347,12 +322,8 @@ public class NhapTaiKhoanService {
 			return "";
 		}
 		Cell c = row.getCell(cot);
-		String so;
-		if (c.getCellType() == CellType.NUMERIC) {
-			so = String.valueOf((long) c.getNumericCellValue());
-		} else {
-			so = dinhDangO.formatCellValue(c);
-		}
+		String so = c.getCellType() == CellType.NUMERIC ? String.valueOf((long) c.getNumericCellValue())
+				: dinhDangO.formatCellValue(c);
 		so = so.replaceAll("[\\s.\\-()]", "");
 		if (so.startsWith("+84")) {
 			so = "0" + so.substring(3);
@@ -363,46 +334,6 @@ public class NhapTaiKhoanService {
 			so = "0" + so;
 		}
 		return so;
-	}
-
-	/**
-	 * Ngày sinh có thể là ô ngày tháng thật của Excel, hoặc chữ gõ tay kiểu
-	 * 31/01/2000, 31-1-2000, 2000-01-31. Trả về dạng lưu trong CSDL, hoặc null
-	 * nếu không hiểu được.
-	 */
-	private String docNgay(Row row, Integer cot) {
-		if (cot == null || row == null || row.getCell(cot) == null) {
-			return null;
-		}
-		Cell c = row.getCell(cot);
-		try {
-			if (c.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(c)) {
-				LocalDate d = c.getDateCellValue().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-				return d.format(DINH_DANG_LUU);
-			}
-		} catch (Exception ignored) {
-			// rơi xuống đọc dạng chữ
-		}
-
-		String chu = dinhDangO.formatCellValue(c).trim();
-		if (chu.isEmpty()) {
-			return null;
-		}
-		// STRICT: mặc định Java "làm tròn" ngày không tồn tại — 31/02 thành 29/02 —
-		// rồi lưu im lặng một ngày sinh sai. Chế độ nghiêm ngặt thì từ chối hẳn.
-		// (Ở chế độ này phải viết năm là uuuu; yyyy đòi kèm cả kỷ nguyên.)
-		for (String mau : new String[] { "d/M/uuuu", "d-M-uuuu", "d.M.uuuu", "uuuu-M-d", "uuuu/M/d" }) {
-			try {
-				LocalDate d = LocalDate.parse(chu, DateTimeFormatter.ofPattern(mau).withResolverStyle(ResolverStyle.STRICT));
-				if (d.isAfter(LocalDate.now()) || d.getYear() < 1900) {
-					return null;
-				}
-				return d.format(DINH_DANG_LUU);
-			} catch (Exception ignored) {
-				// thử mẫu kế tiếp
-			}
-		}
-		return null;
 	}
 
 	private boolean dongTrong(Row row) {
@@ -423,11 +354,36 @@ public class NhapTaiKhoanService {
 		return bo.replace('đ', 'd').replace('Đ', 'D').toLowerCase().replaceAll("\\s+", " ").trim();
 	}
 
+	/** Moodle tách họ và tên thành hai trường bắt buộc. */
+	private void datHoTen(MoodleUserRequest dto, String fullname, String username) {
+		String ten = username, ho = "Học viên";
+		if (fullname != null && !fullname.isBlank()) {
+			String sach = fullname.trim();
+			int viTri = sach.lastIndexOf(' ');
+			if (viTri > 0) {
+				ten = sach.substring(viTri + 1);
+				ho = sach.substring(0, viTri);
+			} else {
+				ten = sach;
+			}
+		}
+		dto.setFirstname(ten);
+		dto.setLastname(ho);
+	}
+
+	/**
+	 * Mật khẩu ngẫu nhiên đủ mạnh theo chính sách mặc định của Moodle, nhưng vẫn
+	 * đọc được từ giấy in: đã bỏ các ký tự dễ nhầm (0/O, 1/l/I).
+	 */
 	private String sinhMatKhau() {
 		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < DO_DAI_MAT_KHAU_TU_SINH; i++) {
-			sb.append(BANG_CHU.charAt(ngauNhien.nextInt(BANG_CHU.length())));
+		sb.append(CHU_HOA.charAt(ngauNhien.nextInt(CHU_HOA.length())));
+		for (int i = 0; i < 5; i++) {
+			sb.append(CHU_THUONG.charAt(ngauNhien.nextInt(CHU_THUONG.length())));
 		}
+		sb.append(CHU_SO.charAt(ngauNhien.nextInt(CHU_SO.length())));
+		sb.append(CHU_SO.charAt(ngauNhien.nextInt(CHU_SO.length())));
+		sb.append(DAC_BIET.charAt(ngauNhien.nextInt(DAC_BIET.length())));
 		return sb.toString();
 	}
 
@@ -441,8 +397,8 @@ public class NhapTaiKhoanService {
 			Sheet sh = wb.createSheet("Hoc vien");
 			CellStyle dam = kieuTieuDe(wb);
 
-			// Cột SĐT và ngày sinh để dạng CHỮ: không thì Excel tự đổi 0901234567
-			// thành số và nuốt mất số 0 đầu, còn 01/02/2000 bị hiểu thành 2 tháng 1.
+			// Cột SĐT để dạng CHỮ: không thì Excel tự đổi 0901234567 thành số và
+			// nuốt mất số 0 đầu.
 			CellStyle kieuChu = wb.createCellStyle();
 			kieuChu.setDataFormat(wb.createDataFormat().getFormat("@"));
 
@@ -454,7 +410,7 @@ public class NhapTaiKhoanService {
 				sh.setDefaultColumnStyle(i, kieuChu);
 			}
 
-			String[] viDu = { "nguyenvana", "Nguyễn Văn A", "nguyenvana@example.com", "0901234567", "15/03/2001", "" };
+			String[] viDu = { "nguyenvana", "Nguyễn Văn A", "nguyenvana@example.com", "0901234567", "" };
 			Row r = sh.createRow(1);
 			for (int i = 0; i < viDu.length; i++) {
 				Cell c = r.createCell(i);
@@ -462,7 +418,7 @@ public class NhapTaiKhoanService {
 				c.setCellStyle(kieuChu);
 			}
 
-			int[] rong = { 18, 26, 30, 16, 14, 30 };
+			int[] rong = { 18, 26, 30, 20, 30 };
 			for (int i = 0; i < rong.length; i++) {
 				sh.setColumnWidth(i, rong[i] * 256);
 			}
@@ -475,8 +431,8 @@ public class NhapTaiKhoanService {
 	}
 
 	/**
-	 * Danh sách tài khoản vừa tạo kèm mật khẩu, để admin in hoặc gửi cho học
-	 * viên. Chỉ gồm các dòng tạo mới — tài khoản cũ không có mật khẩu mới để phát.
+	 * Danh sách tài khoản vừa tạo kèm mật khẩu, để admin in hoặc gửi cho học viên.
+	 * Chỉ gồm các dòng tạo mới — tài khoản cũ không có mật khẩu mới để phát.
 	 */
 	public byte[] xuatTaiKhoan(List<DongKetQua> ketQua) throws Exception {
 		try (XSSFWorkbook wb = new XSSFWorkbook()) {

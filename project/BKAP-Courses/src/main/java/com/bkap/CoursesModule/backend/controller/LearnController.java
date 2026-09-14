@@ -28,12 +28,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.bkap.CoursesModule.backend.service.ICourseService;
-import com.bkap.CoursesModule.backend.service.IEnrollmentService;
+import com.bkap.CoursesModule.backend.service.LmsCatalogService;
+import com.bkap.CoursesModule.backend.service.LmsTienDoService;
 import com.bkap.CoursesModule.backend.service.LmsContentService;
 import com.bkap.CoursesModule.backend.service.LmsSsoService;
-import com.bkap.CoursesModule.entity.Course;
-import com.bkap.CoursesModule.entity.Enrollment;
 import com.bkap.config.JwtUtil;
 import com.bkap.config.MoodleConfig;
 
@@ -52,7 +50,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class LearnController {
 
 	@Autowired
-	private ICourseService courseService;
+	private LmsCatalogService lmsCatalogService;
 
 	@Autowired
 	private LmsContentService lmsContentService;
@@ -61,7 +59,8 @@ public class LearnController {
 	private LmsSsoService lmsSsoService;
 
 	@Autowired
-	private IEnrollmentService enrollmentService;
+	private LmsTienDoService lmsTienDoService;
+
 
 	@Autowired
 	private MoodleConfig moodleConfig;
@@ -96,21 +95,21 @@ public class LearnController {
 	/**
 	 * Người đang đăng nhập có được vào học khóa này không.
 	 *
-	 * Học viên: phải có lượt ghi danh do admin cấp. Tài khoản chỉ là tấm vé vào
-	 * cổng, còn khóa nào mở cho ai là do trung tâm quyết.
+	 * Học viên: phải được ghi danh BÊN LMS. Trước đây hỏi bảng enrollment của
+	 * buni; giờ hỏi thẳng Moodle, để cấp quyền một chỗ là có hiệu lực cả hai bên.
 	 *
 	 * Admin: vào được mọi khóa, để kiểm tra nội dung trước khi cấp cho học viên.
 	 *
 	 * Không cần chặn riêng /learn/file: đường dẫn file chỉ được ký và phát ra ở
 	 * endpoint nội dung khóa bên dưới, nơi đã kiểm tra quyền rồi.
 	 */
-	private boolean coQuyenHoc(Authentication authentication, Course course) {
+	private boolean coQuyenHoc(Authentication authentication, int moodleCourseId) throws Exception {
 		if (authentication == null || authentication.getName() == null) {
 			return false;
 		}
 		boolean laAdmin = authentication.getAuthorities().stream()
 				.anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
-		return laAdmin || enrollmentService.daGhiDanh(authentication.getName(), course.getId());
+		return laAdmin || lmsSsoService.daGhiDanh(authentication.getName(), moodleCourseId);
 	}
 
 	/**
@@ -123,42 +122,77 @@ public class LearnController {
 			return ResponseEntity.status(401).body(Map.of("error", "Chưa đăng nhập"));
 		}
 
-		List<Map<String, Object>> ds = new ArrayList<>();
-		for (Enrollment e : enrollmentService.findByUsername(authentication.getName())) {
-			Course c = e.getCourse();
-			Map<String, Object> m = new LinkedHashMap<>();
-			m.put("courseId", c.getId());
-			m.put("title", c.getTitle());
-			m.put("slug", c.getSlug());
-			m.put("thumbnailUrl", c.getThumbnailUrl());
-			m.put("category", c.getCategory() == null ? null : c.getCategory().getName());
-			m.put("status", e.getStatus());
-			m.put("statusLabel", e.getStatusLabel());
-			m.put("progressPercent", e.getProgressPercent());
-			m.put("enrolledAt", e.getEnrolledAt() == null ? null : e.getEnrolledAt().toString());
-			m.put("lastStudiedAt", e.getLastStudiedAt() == null ? null : e.getLastStudiedAt().toString());
-			m.put("coNoiDung", c.getMoodleCourseId() != null);
-			ds.add(m);
+		try {
+			// Danh sách khóa lấy từ ghi danh bên LMS, rồi ghép với dữ liệu khóa học
+			// (tên, ảnh bìa, danh mục) đã có sẵn trong bộ đệm.
+			java.util.Set<Integer> idDangHoc = lmsSsoService.khoaDangHoc(authentication.getName());
+			Integer idNguoiHoc = lmsSsoService.idTaiKhoanLms(authentication.getName());
+
+			List<Map<String, Object>> ds = new ArrayList<>();
+			for (Map<String, Object> khoa : lmsCatalogService.danhSachKhoa()) {
+				if (!idDangHoc.contains(khoa.get("id"))) {
+					continue;
+				}
+				@SuppressWarnings("unchecked")
+				Map<String, Object> danhMuc = (Map<String, Object>) khoa.get("category");
+
+				Map<String, Object> m = new LinkedHashMap<>();
+				m.put("courseId", khoa.get("id"));
+				m.put("title", khoa.get("title"));
+				m.put("slug", khoa.get("slug"));
+				m.put("thumbnailUrl", khoa.get("thumbnailUrl"));
+				m.put("category", danhMuc == null ? null : danhMuc.get("name"));
+
+				// Tiến độ do Moodle tự ghi nhận (học viên mở tài liệu, nộp bài...).
+				// Khóa nào chưa bật theo dõi hoàn thành thì trả null và giao diện ẩn
+				// thanh tiến độ — thà không hiện còn hơn hiện 0% cho người đã học xong.
+				//
+				// Mỗi khóa tốn một lời gọi sang Moodle. Vài khóa thì không sao; lớp nào
+				// học chục khóa mà thấy chậm thì phải đệm lại theo từng người.
+				Integer tienDo = idNguoiHoc == null ? null
+						: lmsTienDoService.phanTramHoanThanh((Integer) khoa.get("id"), idNguoiHoc);
+				boolean xong = tienDo != null && tienDo >= 100;
+
+				m.put("status", xong ? "COMPLETED" : "IN_PROGRESS");
+				m.put("statusLabel", xong ? "Hoàn thành" : "Đang học");
+				m.put("progressPercent", tienDo);
+				m.put("enrolledAt", null);
+				m.put("coNoiDung", true);
+				ds.add(m);
+			}
+			return ResponseEntity.ok(ds);
+
+		} catch (Exception e) {
+			System.err.println("[Learn] Không lấy được khóa của " + authentication.getName() + ": " + e.getMessage());
+			return ResponseEntity.status(502)
+					.body(Map.of("error", "Chưa lấy được danh sách khóa học từ hệ thống LMS."));
 		}
-		return ResponseEntity.ok(ds);
 	}
 
 	// ─────────────────────────────────────────────────────────────
 	// NỘI DUNG KHÓA HỌC
 	// ─────────────────────────────────────────────────────────────
 
+	/** courseId là id khóa học bên LMS. */
 	@GetMapping("/{courseId}")
-	public ResponseEntity<?> layNoiDung(@PathVariable Short courseId, Authentication authentication) {
-		Course course = courseService.getCourseById(courseId);
-		if (course == null) {
-			return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy khóa học"));
-		}
-		if (!coQuyenHoc(authentication, course)) {
-			return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
-		}
-
+	public ResponseEntity<?> layNoiDung(@PathVariable Integer courseId, Authentication authentication) {
 		try {
-			Map<String, Object> noiDung = lmsContentService.layNoiDung(course);
+			Map<String, Object> khoa = lmsCatalogService.chiTietKhoa(courseId);
+			if (khoa == null) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy khóa học"));
+			}
+			if (!coQuyenHoc(authentication, courseId)) {
+				return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
+			}
+
+			Map<String, Object> noiDung = lmsContentService.layNoiDung(courseId, String.valueOf(khoa.get("title")));
+
+			// Đánh dấu mục đã hoàn thành và điểm bài kiểm tra của chính người đang xem.
+			Integer idNguoiHoc = lmsSsoService.idTaiKhoanLms(authentication.getName());
+			if (idNguoiHoc != null) {
+				ganTienDo(noiDung, lmsTienDoService.trangThaiHoanThanh(courseId, idNguoiHoc),
+						lmsTienDoService.diemBaiKiemTra(courseId, idNguoiHoc));
+			}
 
 			// Ký sẵn đường dẫn cho từng file, để frontend nhúng thẳng vào thẻ
 			// iframe/video mà không cần gửi kèm token đăng nhập.
@@ -172,6 +206,25 @@ public class LearnController {
 			System.err.println("[Learn] Lỗi lấy nội dung khóa " + courseId + ": " + e.getMessage());
 			return ResponseEntity.status(502).body(Map.of("error",
 					"Chưa lấy được nội dung từ hệ thống LMS. Vui lòng thử lại hoặc liên hệ quản trị viên."));
+		}
+	}
+
+	/** Gắn cờ hoàn thành và điểm vào từng mục trong cấu trúc khóa học. */
+	@SuppressWarnings("unchecked")
+	private void ganTienDo(Map<String, Object> noiDung, Map<Integer, Boolean> hoanThanh, Map<Integer, String> diem) {
+		for (Map<String, Object> chuong : (List<Map<String, Object>>) noiDung.get("sections")) {
+			for (Map<String, Object> muc : (List<Map<String, Object>>) chuong.get("modules")) {
+				Object cmid = muc.get("cmid");
+				if (cmid == null) {
+					continue;
+				}
+				if (hoanThanh.containsKey(cmid)) {
+					muc.put("daHoanThanh", hoanThanh.get(cmid));
+				}
+				if (diem.containsKey(cmid)) {
+					muc.put("diem", diem.get(cmid));
+				}
+			}
 		}
 	}
 
@@ -245,11 +298,11 @@ public class LearnController {
 		}
 
 		// cmid không bắt buộc: có thì mở thẳng hoạt động đó, không có thì vào
-		// trang chính của khóa (nút "Đăng ký để làm bài kiểm tra").
-		Course course;
+		// trang chính của khóa. courseId là id bên LMS.
+		int courseId;
 		Integer cmid = null;
 		try {
-			course = courseService.getCourseById(Short.parseShort(body.getOrDefault("courseId", "").trim()));
+			courseId = Integer.parseInt(body.getOrDefault("courseId", "").trim());
 			String cmidChuoi = body.get("cmid");
 			if (cmidChuoi != null && !cmidChuoi.isBlank()) {
 				cmid = Integer.parseInt(cmidChuoi.trim());
@@ -258,16 +311,16 @@ public class LearnController {
 			return ResponseEntity.badRequest().body(Map.of("error", "Mã khóa học hoặc mã hoạt động không hợp lệ"));
 		}
 
-		if (course == null) {
-			return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy khóa học"));
-		}
-		if (!coQuyenHoc(authentication, course)) {
-			return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
-		}
-
 		try {
-			String loginUrl = cmid == null ? lmsSsoService.duongDanVaoKhoa(authentication.getName(), course)
-					: lmsSsoService.duongDanVaoHoatDong(authentication.getName(), course, cmid, body.get("loai"));
+			if (lmsCatalogService.chiTietKhoa(courseId) == null) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy khóa học"));
+			}
+			if (!coQuyenHoc(authentication, courseId)) {
+				return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
+			}
+
+			String loginUrl = cmid == null ? lmsSsoService.duongDanVaoKhoa(authentication.getName(), courseId)
+					: lmsSsoService.duongDanVaoHoatDong(authentication.getName(), courseId, cmid, body.get("loai"));
 			return ResponseEntity.ok(Map.of("loginUrl", loginUrl));
 
 		} catch (IllegalStateException e) {

@@ -41,9 +41,16 @@ public class MoodleService implements IMoodleService {
 			String cleanPassword = user.getPassword().trim();
 			String cleanEmail = user.getEmail().trim().toLowerCase();
 
-			// ✅ FIX: Bỏ dấu tiếng Việt trước khi gửi Moodle
-			String cleanFirstName = removeAccents(user.getFirstname() != null ? user.getFirstname().trim() : "User");
-			String cleanLastName = removeAccents(user.getLastname() != null ? user.getLastname().trim() : "Khach");
+			// GIỮ dấu tiếng Việt. Bản trước bỏ dấu trước khi gửi, nên "Nguyễn Văn A"
+			// vào Moodle thành "Nguyen Van A" — giáo viên điểm danh lại phải đoán tên.
+			// Moodle nhận UTF-8 bình thường; các lời gọi khác của dự án vẫn gửi tiếng
+			// Việt có dấu và không có vấn đề gì.
+			String cleanFirstName = user.getFirstname() != null && !user.getFirstname().isBlank()
+					? user.getFirstname().trim()
+					: "Học viên";
+			String cleanLastName = user.getLastname() != null && !user.getLastname().isBlank()
+					? user.getLastname().trim()
+					: "buni";
 
 			MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
 			formData.add("users[0][username]", cleanUsername);
@@ -52,6 +59,9 @@ public class MoodleService implements IMoodleService {
 			formData.add("users[0][lastname]", cleanLastName);
 			formData.add("users[0][email]", cleanEmail);
 			formData.add("users[0][auth]", "manual");
+			if (user.getPhone() != null && !user.getPhone().isBlank()) {
+				formData.add("users[0][phone1]", user.getPhone().trim());
+			}
 
 			HttpHeaders headers = new HttpHeaders();
 			headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);

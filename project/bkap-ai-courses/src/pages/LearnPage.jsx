@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import {
   AlertCircle,
   ArrowLeft,
+  Check,
   ClipboardList,
   ExternalLink,
   FileText,
@@ -242,10 +243,18 @@ function NoiDungMuc({ muc, courseId }) {
               ? "Bài kiểm tra được thực hiện trên hệ thống LMS"
               : "Nội dung này nằm trên hệ thống LMS"}
           </p>
-          <p className="mb-5 text-sm text-gray-500">
+          <p className="mb-3 text-sm text-gray-500">
             Bấm mở là vào thẳng bằng chính tài khoản của bạn, không phải
             đăng nhập lại.
           </p>
+
+          {/* Điểm lấy từ LMS — khỏi phải sang đó xem mới biết mình được mấy điểm */}
+          {muc.diem && (
+            <p className="mb-5 text-sm">
+              <span className="text-gray-500">Điểm cao nhất của bạn: </span>
+              <span className="font-bold text-primary">{muc.diem}</span>
+            </p>
+          )}
           <button
             type="button"
             onClick={moTrenLms}
@@ -402,6 +411,15 @@ export default function LearnPage() {
                               className="mt-0.5 h-4 w-4 shrink-0"
                             />
                             <span className="min-w-0 flex-1">{muc.name}</span>
+
+                            {/* Cờ hoàn thành do Moodle ghi nhận. Khóa nào chưa bật
+                                theo dõi hoàn thành thì không có trường này. */}
+                            {muc.daHoanThanh && (
+                              <Check
+                                className="mt-0.5 h-4 w-4 shrink-0 text-green-600"
+                                strokeWidth={3}
+                              />
+                            )}
                           </button>
                         </li>
                       );

@@ -11,10 +11,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.bkap.UserModule.backend.service.IRefreshTokenService;
-import com.bkap.UserModule.backend.service.IUserService;
+import com.bkap.UserModule.backend.service.MoodleAuthService;
 import com.bkap.UserModule.dto.UserResponseDTO;
-import com.bkap.UserModule.entity.User;
 import com.bkap.config.JwtUtil;
 
 @RestController
@@ -22,10 +20,7 @@ import com.bkap.config.JwtUtil;
 public class UserController {
 
 	@Autowired
-	private IUserService userService;
-
-	@Autowired
-	private IRefreshTokenService refreshTokenService;
+	private MoodleAuthService moodleAuthService;
 
 	@Autowired
 	private JwtUtil jwtUtil;
@@ -42,10 +37,29 @@ public class UserController {
 			return ResponseEntity.status(401).build(); // Chưa đăng nhập/không có token hợp lệ
 		}
 
-		String username = principal.getName();
-		UserResponseDTO userProfile = userService.getUserByUsername(username);
+		try {
+			com.fasterxml.jackson.databind.JsonNode u = moodleAuthService
+					.timTheoTenDangNhap(principal.getName());
+			if (u == null) {
+				return ResponseEntity.status(404).build();
+			}
 
-		return ResponseEntity.ok(userProfile);
+			// Hồ sơ giờ nằm bên LMS. Email và điện thoại có thể trống nếu vai trò
+			// của tài khoản dịch vụ chưa được cấp quyền xem chi tiết người dùng.
+			UserResponseDTO dto = new UserResponseDTO();
+			dto.setUsername(u.path("username").asText(""));
+			dto.setFullname(u.path("fullname").asText(""));
+			dto.setEmail(u.path("email").asText(""));
+			dto.setPhone(u.path("phone1").asText(""));
+			dto.setRole("STUDENT");
+			// Moodle không có trường ngày sinh.
+			dto.setBirthday(null);
+			return ResponseEntity.ok(dto);
+
+		} catch (Exception e) {
+			System.err.println("[User] Không lấy được hồ sơ: " + e.getMessage());
+			return ResponseEntity.status(502).build();
+		}
 	}
 
 	@PutMapping("/profile")
@@ -56,9 +70,16 @@ public class UserController {
 			return ResponseEntity.status(401).build();
 		}
 
-		String username = principal.getName();
-		UserResponseDTO updated = userService.updateUserProfile(username, updateRequest);
-		return ResponseEntity.ok(updated);
+		try {
+			moodleAuthService.capNhatHoSo(principal.getName(), updateRequest.getFullname(), updateRequest.getEmail(),
+					updateRequest.getPhone());
+			return getUserProfile(principal);
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().build();
+		} catch (Exception e) {
+			System.err.println("[User] Không cập nhật được hồ sơ: " + e.getMessage());
+			return ResponseEntity.status(502).build();
+		}
 	}
 
 	/**
@@ -76,19 +97,26 @@ public class UserController {
 			return ResponseEntity.status(401).body(Map.of("error", "Chưa đăng nhập"));
 		}
 
-		User user;
 		try {
-			user = userService.doiMatKhau(principal.getName(), body.get("currentPassword"),
-					body.get("newPassword"));
+			moodleAuthService.doiMatKhau(principal.getName(), body.get("currentPassword"), body.get("newPassword"));
 		} catch (IllegalArgumentException e) {
 			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		} catch (Exception e) {
+			System.err.println("[User] Không đổi được mật khẩu: " + e.getMessage());
+			return ResponseEntity.status(502)
+					.body(Map.of("error", "Chưa kết nối được hệ thống LMS. Vui lòng thử lại sau."));
 		}
 
-		refreshTokenService.thuHoiTatCa(user);
+		// Mật khẩu đổi bên LMS nên phiên cũ trên các máy khác coi như hết giá trị
+		// về mặt mật khẩu — nhưng vé làm mới thì KHÔNG thu hồi được nữa (không còn
+		// CSDL để đánh dấu). Chúng vẫn dùng được tới khi hết hạn.
+		String vaiTro = principal instanceof org.springframework.security.core.Authentication a
+				&& a.getAuthorities().stream().anyMatch(x -> "ROLE_ADMIN".equals(x.getAuthority())) ? "ADMIN"
+						: "STUDENT";
 
 		return ResponseEntity.ok(Map.of("message", "Đã đổi mật khẩu", "token",
-				jwtUtil.generateToken(user.getUsername(), user.getRole().name()), "refreshToken",
-				refreshTokenService.cap(user)));
+				jwtUtil.generateToken(principal.getName(), vaiTro), "refreshToken",
+				jwtUtil.taoRefreshToken(principal.getName(), "ADMIN".equals(vaiTro))));
 	}
 
 }

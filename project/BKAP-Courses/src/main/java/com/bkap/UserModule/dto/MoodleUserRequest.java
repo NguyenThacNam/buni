@@ -11,6 +11,7 @@ public class MoodleUserRequest {
 	private String firstname;
 	private String lastname;
 	private String email;
+	private String phone;
 
 	/** Phương thức xác thực trên Moodle. Mặc định luôn là "manual" */
 	private String auth = "manual";
@@ -63,5 +64,13 @@ public class MoodleUserRequest {
 
 	public void setAuth(String auth) {
 		this.auth = auth;
+	}
+
+	public String getPhone() {
+		return phone;
+	}
+
+	public void setPhone(String phone) {
+		this.phone = phone;
 	}
 }

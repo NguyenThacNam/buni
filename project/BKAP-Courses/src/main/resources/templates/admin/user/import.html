@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{admin/layout :: page('Nhập học viên từ Excel', 'Tạo tài khoản cho cả lớp một lượt', 'user', ~{::main})}">
+      th:replace="~{admin/layout :: page('Nhập học viên từ Excel', 'Tạo tài khoản cho cả lớp một lượt', 'import', ~{::main})}">
 <body>
 <main>
 
     <div class="toolbar">
-        <a th:href="@{/admin/user}" class="btn btn--ghost">← Danh sách người dùng</a>
         <div class="toolbar__spacer"></div>
         <a th:href="@{/admin/user/import/mau.xlsx}" class="btn btn--ghost">⬇ Tải file mẫu</a>
     </div>
@@ -22,8 +21,8 @@
                         <input type="file" name="file" required
                                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                         <span class="hint">
-                            Dòng đầu là tiêu đề: <b>Tên đăng nhập, Họ tên, Email, Số điện thoại, Ngày sinh</b>,
-                            thêm cột <b>Mật khẩu</b> nếu muốn tự đặt. Để trống mật khẩu thì hệ thống tự sinh.
+                            Dòng đầu là tiêu đề: <b>Tên đăng nhập, Họ tên, Email</b> (bắt buộc), thêm
+                            <b>Số điện thoại</b> và <b>Mật khẩu</b> nếu cần. Để trống mật khẩu thì hệ thống tự sinh.
                             Chưa có file thì bấm <b>Tải file mẫu</b> ở góc trên.
                         </span>
                     </div>
@@ -34,11 +33,11 @@
                             <option value="">— Chỉ tạo tài khoản, chưa ghi danh —</option>
                             <option th:each="c : ${courses}" th:value="${c.id}"
                                     th:selected="${courseIdDaChon != null and courseIdDaChon == c.id}"
-                                    th:text="${c.title} + (${c.moodleCourseId != null} ? '' : '  (chưa nối LMS)')"></option>
+                                    th:text="${c.title}"></option>
                         </select>
                         <span class="hint">
-                            Chọn khóa thì cả lớp được cấp khóa đó và ghi danh luôn bên LMS — kể cả những
-                            tài khoản đã có sẵn. Mỗi học viên mất khoảng 1 giây để đồng bộ với LMS.
+                            Chọn khóa thì cả lớp được ghi danh vào khóa đó trên LMS — kể cả những tài
+                            khoản đã có sẵn. Mỗi học viên mất khoảng 1 giây, lớp đông thì chờ một lát.
                         </span>
                     </div>
                 </div>
@@ -73,12 +72,12 @@
                 </div>
             </div>
 
-            <!-- Mật khẩu tự sinh chỉ còn trong phiên này — CSDL chỉ giữ bản băm. -->
+            <!-- Mật khẩu tự sinh chỉ còn trong phiên này; bên LMS chỉ giữ bản băm. -->
             <div class="alert alert--warn" th:if="${soTao > 0}">
                 <span>!</span>
                 <span>
                     Tải danh sách tài khoản về <b>ngay bây giờ</b> để phát cho học viên. Mật khẩu không được lưu
-                    ở đâu khác — đóng trình duyệt là không xem lại được, chỉ còn cách đặt lại từng người.
+                    ở đâu khác — đóng trình duyệt là không xem lại được, chỉ còn cách đặt lại từng người bên LMS.
                     &nbsp;<a th:href="@{/admin/user/import/tai-khoan.xlsx}" class="btn btn--primary btn--sm">
                     ⬇ Tải danh sách tài khoản</a>
                 </span>

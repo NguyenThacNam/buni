@@ -35,25 +35,13 @@
         <nav class="sidebar__nav">
             <div class="sidebar__label">Quản lý</div>
 
-            <a th:href="@{/admin}" class="sidebar__link"
-               th:classappend="${active == 'dashboard'} ? 'is-active'">
-                <span class="ico">▦</span> Tổng quan
-            </a>
-            <a th:href="@{/admin/course}" class="sidebar__link"
-               th:classappend="${active == 'course'} ? 'is-active'">
-                <span class="ico">▤</span> Khóa học
-            </a>
-            <a th:href="@{/admin/category}" class="sidebar__link"
-               th:classappend="${active == 'category'} ? 'is-active'">
-                <span class="ico">◈</span> Danh mục
-            </a>
-            <a th:href="@{/admin/user}" class="sidebar__link"
-               th:classappend="${active == 'user'} ? 'is-active'">
-                <span class="ico">◉</span> Người dùng
-            </a>
-            <a th:href="@{/admin/enrollment}" class="sidebar__link"
-               th:classappend="${active == 'enrollment'} ? 'is-active'">
-                <span class="ico">✓</span> Ghi danh
+            <!-- Khu quản trị chỉ còn đúng trang này. Khóa học, danh mục, người dùng
+                 và ghi danh đều quản lý bên LMS — hai nơi cùng giữ một sự thật thì
+                 kiểu gì cũng lệch. Giữ lại nhập Excel vì Moodle không có sẵn cách
+                 nhập cả lớp bằng một file. -->
+            <a th:href="@{/admin/user/import}" class="sidebar__link"
+               th:classappend="${active == 'import'} ? 'is-active'">
+                <span class="ico">⬆</span> Nhập học viên
             </a>
 
             <div class="sidebar__label">Liên kết</div>

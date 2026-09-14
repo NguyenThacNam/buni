@@ -1,6 +1,7 @@
 package com.bkap.UserModule.backend.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -14,8 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.bkap.CoursesModule.backend.service.ICourseService;
-import com.bkap.CoursesModule.entity.Course;
+import com.bkap.CoursesModule.backend.service.LmsCatalogService;
 import com.bkap.UserModule.backend.service.NhapTaiKhoanService;
 import com.bkap.UserModule.backend.service.NhapTaiKhoanService.DongKetQua;
 import com.bkap.UserModule.backend.service.NhapTaiKhoanService.TrangThai;
@@ -42,11 +42,11 @@ public class AdminUserImportController {
 	private NhapTaiKhoanService nhapTaiKhoanService;
 
 	@Autowired
-	private ICourseService courseService;
+	private LmsCatalogService lmsCatalogService;
 
 	@GetMapping
-	public String form(Model model) {
-		model.addAttribute("courses", courseService.getAllCourses());
+	public String form(Model model) throws Exception {
+		model.addAttribute("courses", lmsCatalogService.danhSachKhoa());
 		return "admin/user/import";
 	}
 
@@ -57,8 +57,9 @@ public class AdminUserImportController {
 
 	@PostMapping
 	public String nhap(@RequestParam("file") MultipartFile file,
-			@RequestParam(name = "courseId", required = false) Short courseId, Model model, HttpSession session) {
-		model.addAttribute("courses", courseService.getAllCourses());
+			@RequestParam(name = "courseId", required = false) Integer courseId, Model model, HttpSession session)
+			throws Exception {
+		model.addAttribute("courses", lmsCatalogService.danhSachKhoa());
 		model.addAttribute("courseIdDaChon", courseId);
 
 		if (file == null || file.isEmpty()) {
@@ -66,9 +67,10 @@ public class AdminUserImportController {
 			return "admin/user/import";
 		}
 
-		Course khoa = null;
+		// courseId là id khóa BÊN LMS.
+		Map<String, Object> khoa = null;
 		if (courseId != null) {
-			khoa = courseService.getCourseById(courseId);
+			khoa = lmsCatalogService.chiTietKhoa(courseId);
 			if (khoa == null) {
 				model.addAttribute("flashErr", "Không tìm thấy khóa học đã chọn.");
 				return "admin/user/import";
@@ -77,7 +79,7 @@ public class AdminUserImportController {
 
 		List<DongKetQua> ketQua;
 		try {
-			ketQua = nhapTaiKhoanService.nhap(file.getInputStream(), khoa);
+			ketQua = nhapTaiKhoanService.nhap(file.getInputStream(), courseId);
 		} catch (IllegalArgumentException e) {
 			model.addAttribute("flashErr", e.getMessage());
 			return "admin/user/import";

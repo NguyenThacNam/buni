@@ -35,7 +35,7 @@ public class WebConfiguration {
 	private List<String> allowedOrigins;
 
 	@Autowired
-	private AdminUserDetailsService adminUserDetailsService;
+	private AdminMoodleAuthProvider adminMoodleAuthProvider;
 
 	/**
 	 * Chuỗi bảo mật RIÊNG cho khu quản trị Thymeleaf, chạy trước chuỗi API.
@@ -64,7 +64,10 @@ public class WebConfiguration {
 						.defaultSuccessUrl("/admin", true).failureUrl("/admin/login?error").permitAll())
 				.logout(logout -> logout.logoutUrl("/admin/logout").logoutSuccessUrl("/admin/login?logout")
 						.invalidateHttpSession(true).deleteCookies("JSESSIONID"))
-				.userDetailsService(adminUserDetailsService);
+				// Xác thực bằng tài khoản LMS: mật khẩu và quyền quản trị đều do Moodle
+				// giữ, buni không còn bảng người dùng. Học viên gõ đúng mật khẩu vẫn bị
+				// chặn, vì provider đòi cờ quản trị site bên LMS.
+					.authenticationProvider(adminMoodleAuthProvider);
 		return http.build();
 	}
 

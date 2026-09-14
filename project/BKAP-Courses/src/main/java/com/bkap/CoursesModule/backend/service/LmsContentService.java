@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import com.bkap.CoursesModule.entity.Course;
 import com.bkap.config.MoodleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,14 +46,9 @@ public class LmsContentService {
 	/**
 	 * Trả về cấu trúc học của khóa: các chương, mỗi chương gồm các mục.
 	 *
-	 * @throws IllegalStateException khi khóa chưa nối với LMS, hoặc Moodle từ chối
+	 * @throws IllegalStateException khi Moodle từ chối
 	 */
-	public Map<String, Object> layNoiDung(Course course) throws Exception {
-		if (course.getMoodleCourseId() == null) {
-			throw new IllegalStateException("Khóa học này chưa được nối với hệ thống LMS");
-		}
-		int moodleCourseId = course.getMoodleCourseId();
-
+	public Map<String, Object> layNoiDung(int moodleCourseId, String tenKhoa) throws Exception {
 		JsonNode chuong = goiMoodle("core_course_get_contents", "&courseid=" + moodleCourseId);
 		if (!chuong.isArray()) {
 			throw new IllegalStateException("Moodle không trả về nội dung khóa học");
@@ -87,8 +81,8 @@ public class LmsContentService {
 		}
 
 		Map<String, Object> ketQua = new LinkedHashMap<>();
-		ketQua.put("courseId", course.getId());
-		ketQua.put("title", course.getTitle());
+		ketQua.put("courseId", moodleCourseId);
+		ketQua.put("title", tenKhoa);
 		ketQua.put("moodleCourseId", moodleCourseId);
 		ketQua.put("sections", dsChuong);
 		return ketQua;

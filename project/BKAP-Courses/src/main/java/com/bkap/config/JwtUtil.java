@@ -49,6 +49,65 @@ public class JwtUtil {
 	}
 
 	/**
+	 * Hạn của refresh token.
+	 *
+	 * Trước đây refresh token là chuỗi ngẫu nhiên lưu trong bảng refresh_token,
+	 * nên đăng xuất hay đổi mật khẩu là thu hồi được ngay. Bỏ CSDL thì không còn
+	 * chỗ ghi "vé này đã hủy", nên nó thành JWT tự chứng minh — đổi lại KHÔNG thu
+	 * hồi được: vé lọt ra ngoài vẫn dùng được tới khi hết hạn.
+	 *
+	 * Vì vậy hạn nên để ngắn hơn thời CSDL. Đổi ở app.jwt.refresh-token-days.
+	 */
+	@Value("${app.jwt.refresh-token-days}")
+	private long soNgayLamMoi;
+
+	/**
+	 * Vé để xin access token mới. Chỉ mang tên đăng nhập, KHÔNG mang vai trò —
+	 * vai trò phải hỏi lại LMS mỗi lần làm mới, không thì gỡ quyền quản trị bên
+	 * LMS xong người ta vẫn cầm vé cũ vào được cả tuần.
+	 */
+	public String taoRefreshToken(String username, boolean laAdmin) {
+		long hetHan = System.currentTimeMillis() + soNgayLamMoi * 24 * 60 * 60 * 1000;
+		return Jwts.builder().setSubject(username).claim("muc_dich", "lam_moi")
+				.claim("role", laAdmin ? "ADMIN" : "STUDENT").setIssuedAt(new Date()).setExpiration(new Date(hetHan))
+				.signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
+	}
+
+	/**
+	 * Vai trò ghi trong vé làm mới.
+	 *
+	 * Phải mang theo vì cờ "quản trị site" chỉ hỏi được bằng token của chính
+	 * người dùng, mà lúc làm mới thì không có mật khẩu để xin token đó. Hệ quả:
+	 * gỡ quyền quản trị bên LMS chỉ ăn sau khi vé hết hạn, hoặc khi người đó đăng
+	 * nhập lại. Muốn ăn ngay thì phải chuyển sang xác định admin bằng nhóm
+	 * (cohort) bên Moodle — tra được bằng token dịch vụ bất cứ lúc nào.
+	 */
+	public String docVaiTroTuRefreshToken(String token) {
+		try {
+			Claims claims = getClaims(token);
+			if (!"lam_moi".equals(claims.get("muc_dich", String.class))) {
+				return "STUDENT";
+			}
+			return "ADMIN".equals(claims.get("role", String.class)) ? "ADMIN" : "STUDENT";
+		} catch (Exception e) {
+			return "STUDENT";
+		}
+	}
+
+	/** Tên đăng nhập trong vé làm mới, hoặc null nếu vé hỏng, hết hạn, hay sai loại. */
+	public String docRefreshToken(String token) {
+		try {
+			Claims claims = getClaims(token);
+			if (!"lam_moi".equals(claims.get("muc_dich", String.class))) {
+				return null;
+			}
+			return claims.getSubject();
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	/**
 	 * Ký một đường dẫn file để nhúng thẳng vào thẻ img, iframe hay video.
 	 *
 	 * Vì sao cần: trình duyệt tải nội dung của mấy thẻ đó bằng request thường,
