@@ -1,18 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   ArrowLeft,
   Check,
+  CheckCircle2,
+  Circle,
   ClipboardList,
   ExternalLink,
   FileText,
+  Lock,
   MessageSquare,
   PlayCircle,
   Video,
 } from "lucide-react";
 
 import { api } from "../api/Api";
+import { useAuth } from "../context/AuthContext";
+import QuizGioiThieu from "../components/quiz/QuizGioiThieu";
 import { API_BASE_URL, CONTACT_INFO, LMS_URL } from "../data/constants";
 
 /**
@@ -21,9 +26,9 @@ import { API_BASE_URL, CONTACT_INFO, LMS_URL } from "../data/constants";
  * Nội dung lấy từ LMS qua backend chứ không gọi thẳng Moodle — token dịch vụ
  * mở được toàn bộ API nên phải giữ ở phía máy chủ.
  *
- * Phân vai giữa hai hệ thống: buni lo phần đọc/xem (PDF, tài liệu, video),
- * còn bài kiểm tra và diễn đàn vẫn để Moodle làm, vì chấm điểm và lưu lượt
- * làm bài nằm bên đó.
+ * Phân vai giữa hai hệ thống: buni lo phần đọc/xem (PDF, tài liệu, video) và
+ * giao diện làm bài kiểm tra; chấm điểm, lưu lượt làm vẫn do Moodle quyết qua
+ * API. Diễn đàn, bài nộp... vẫn mở sang LMS.
  */
 
 /**
@@ -88,9 +93,28 @@ const NHAN_LOAI = {
 // KHUNG NỘI DUNG CHÍNH
 // ─────────────────────────────────────────────────────────────
 
-function NoiDungMuc({ muc, courseId }) {
+function NoiDungMuc({ muc, courseId, onDanhDau }) {
   const [dangMoLms, setDangMoLms] = useState(false);
   const [loiLms, setLoiLms] = useState(null);
+  const [dangDanhDau, setDangDanhDau] = useState(false);
+  const [loiDanhDau, setLoiDanhDau] = useState(null);
+
+  // Đổi sang mục khác thì xóa lỗi của mục cũ.
+  useEffect(() => {
+    setLoiDanhDau(null);
+  }, [muc?.cmid]);
+
+  const danhDau = async () => {
+    setDangDanhDau(true);
+    setLoiDanhDau(null);
+    try {
+      await onDanhDau(muc, !muc.daHoanThanh);
+    } catch (err) {
+      setLoiDanhDau(err?.response?.data?.error || "Chưa lưu được. Vui lòng thử lại.");
+    } finally {
+      setDangDanhDau(false);
+    }
+  };
 
   /**
    * Xin đường dẫn đăng nhập một lần rồi mở sang LMS.
@@ -138,6 +162,20 @@ function NoiDungMuc({ muc, courseId }) {
     );
   }
 
+  // Mục chưa đủ điều kiện mở (Hạn chế truy cập bên LMS): chỉ báo lý do.
+  if (muc.khoa) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center px-4 text-center">
+        <Lock className="mb-4 h-12 w-12 text-gray-300" strokeWidth={1.3} />
+        <p className="mb-1 font-heading text-lg font-bold text-gray-900">{muc.name}</p>
+        <p className="max-w-md text-sm text-gray-500">
+          <span className="font-semibold text-gray-600">Điều kiện mở: </span>
+          {muc.lyDoKhoa}
+        </p>
+      </div>
+    );
+  }
+
   const fileUrl = duongDanDayDu(muc.fileUrl);
 
   return (
@@ -152,14 +190,42 @@ function NoiDungMuc({ muc, courseId }) {
           </h2>
         </div>
 
-        {/* Học liệu chỉ xem tại chỗ, không cho tải về máy. Nút tải đã bỏ; video
-            cũng đã tắt mục tải trong trình phát bằng controlsList. */}
-        {muc.filesize ? (
-          <span className="shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
-            {doiKichThuoc(muc.filesize)}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/* Học liệu chỉ xem tại chỗ, không cho tải về máy. Nút tải đã bỏ; video
+              cũng đã tắt mục tải trong trình phát bằng controlsList. */}
+          {muc.filesize ? (
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
+              {doiKichThuoc(muc.filesize)}
+            </span>
+          ) : null}
+
+          {/* Mục cài "học viên tự đánh dấu" bên LMS: bấm để đánh dấu / bỏ đánh dấu. */}
+          {muc.tuDanhDau && (
+            <button
+              type="button"
+              onClick={danhDau}
+              disabled={dangDanhDau}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                muc.daHoanThanh
+                  ? "border-green-600 bg-green-50 text-green-700 hover:bg-green-100"
+                  : "border-gray-300 text-gray-700 hover:border-primary hover:text-primary"
+              }`}
+            >
+              {muc.daHoanThanh ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+              {dangDanhDau ? "Đang lưu..." : muc.daHoanThanh ? "Đã học xong" : "Đánh dấu đã học"}
+            </button>
+          )}
+
+          {/* Mục tự động: chỉ báo trạng thái, không bấm được. */}
+          {!muc.tuDanhDau && muc.daHoanThanh && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700">
+              <CheckCircle2 className="h-4 w-4" />
+              Đã hoàn thành
+            </span>
+          )}
+        </div>
       </div>
+      {loiDanhDau && <p className="text-right text-sm text-primary">{loiDanhDau}</p>}
 
       {/* Video tải lên Moodle: phát thẳng trong trang. Backend chuyển tiếp
           header Range nên kéo thanh thời gian vẫn nhảy đúng. */}
@@ -232,7 +298,20 @@ function NoiDungMuc({ muc, courseId }) {
 
       {/* Kiểm tra, diễn đàn, bài nộp: mở sang LMS. Điểm và lượt làm bài do
           Moodle quản lý, làm lại ở buni sẽ lệch dữ liệu. */}
-      {muc.moodleUrl && (
+      {/* Bài kiểm tra: làm ngay trên buni, điểm do LMS chấm. */}
+      {muc.type === "quiz" && (
+        <QuizGioiThieu
+          courseId={courseId}
+          muc={muc}
+          onMoTrenLms={moTrenLms}
+          dangMoLms={dangMoLms}
+        />
+      )}
+      {muc.type === "quiz" && loiLms && (
+        <p className="text-center text-sm text-primary">{loiLms}</p>
+      )}
+
+      {muc.moodleUrl && muc.type !== "quiz" && (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
           <BieuTuongMuc
             muc={muc}
@@ -278,27 +357,42 @@ function NoiDungMuc({ muc, courseId }) {
 
 export default function LearnPage() {
   const { courseId } = useParams();
+  // ?muc=<cmid>: quay về từ trang làm bài / kết quả thì mở lại đúng bài đó.
+  const [thamSoUrl] = useSearchParams();
+  const mucTrenUrl = Number(thamSoUrl.get("muc")) || null;
 
   const [duLieu, setDuLieu] = useState(null);
   const [dangTai, setDangTai] = useState(true);
   const [loi, setLoi] = useState(null);
   // 403 = chưa được ghi danh. Thử lại cũng vô ích, phải liên hệ trung tâm.
   const [biChan, setBiChan] = useState(false);
+  // Phiên đăng nhập cũ không mang token LMS — phải đăng nhập lại.
+  const [canDangNhapLai, setCanDangNhapLai] = useState(false);
+  const { logout, openLogin } = useAuth();
   const [cmidDangChon, setCmidDangChon] = useState(null);
 
   const tai = useCallback(async () => {
     setDangTai(true);
     setLoi(null);
     setBiChan(false);
+    setCanDangNhapLai(false);
     try {
       const res = await api("get", `/learn/${courseId}`);
       setDuLieu(res.data);
 
-      // Tự mở mục đầu tiên để người học không phải bấm thêm một nhịp.
-      const mucDau = res.data?.sections?.[0]?.modules?.[0];
-      setCmidDangChon(mucDau ? mucDau.cmid : null);
+      // Mở mục ghi trên URL nếu có, không thì tự mở mục đầu tiên để người học
+      // không phải bấm thêm một nhịp.
+      const coMucTrenUrl = (res.data?.sections || []).some((c) =>
+        c.modules.some((m) => m.cmid === mucTrenUrl),
+      );
+      const mucDau = (res.data?.sections || [])
+        .flatMap((c) => c.modules)
+        .find((m) => !m.khoa);
+      setCmidDangChon(coMucTrenUrl ? mucTrenUrl : mucDau ? mucDau.cmid : null);
     } catch (err) {
-      setBiChan(err?.response?.status === 403);
+      const laDangNhapLai = err?.response?.data?.ma === "CAN_DANG_NHAP_LAI";
+      setCanDangNhapLai(laDangNhapLai);
+      setBiChan(err?.response?.status === 403 && !laDangNhapLai);
       setLoi(
         err?.response?.data?.error ||
           "Không tải được nội dung khóa học. Vui lòng thử lại.",
@@ -306,7 +400,7 @@ export default function LearnPage() {
     } finally {
       setDangTai(false);
     }
-  }, [courseId]);
+  }, [courseId, mucTrenUrl]);
 
   useEffect(() => {
     tai();
@@ -320,6 +414,61 @@ export default function LearnPage() {
     }
     return null;
   }, [duLieu, cmidDangChon]);
+
+  /** Ghi trạng thái hoàn thành mới (cmid -> {daHoanThanh, daXem}) vào mục lục. */
+  const apDungHoanThanh = useCallback((hoanThanh) => {
+    if (!hoanThanh) return;
+    // Bản đồ trả về có đủ mọi mục theo dõi của khóa, kể cả mục trong chương khóa.
+    const ds = Object.values(hoanThanh);
+    const tienDoMoi =
+      ds.length && ds.every((t) => t.daHoanThanh !== undefined)
+        ? { xong: ds.filter((t) => t.daHoanThanh).length, tong: ds.length }
+        : null;
+    setDuLieu((cu) =>
+      cu && {
+        ...cu,
+        tienDo: tienDoMoi || cu.tienDo,
+        sections: cu.sections.map((c) => ({
+          ...c,
+          modules: c.modules.map((m) => (hoanThanh[m.cmid] ? { ...m, ...hoanThanh[m.cmid] } : m)),
+        })),
+      },
+    );
+  }, []);
+
+  /**
+   * Mở một mục có điều kiện "phải xem" thì báo LMS là đã xem.
+   *
+   * Học viên học trên buni nên Moodle không tự biết họ đã mở tài liệu. Mỗi mục
+   * chỉ báo một lần trong phiên trang; lỗi thì bỏ qua, không làm phiền người học.
+   */
+  const daBaoXem = useRef(new Set());
+  useEffect(() => {
+    const muc = mucDangChon;
+    if (!muc || muc.khoa || !muc.canXem || muc.daXem || daBaoXem.current.has(muc.cmid)) return;
+    daBaoXem.current.add(muc.cmid);
+    api("post", `/learn/${courseId}/modules/${muc.cmid}/viewed`)
+      .then((res) => apDungHoanThanh(res.data?.hoanThanh))
+      .catch(() => {});
+  }, [mucDangChon, courseId, apDungHoanThanh]);
+
+  const danhDauThuCong = useCallback(
+    async (muc, daXong) => {
+      const res = await api("put", `/learn/${courseId}/modules/${muc.cmid}/completion`, {
+        completed: daXong,
+      });
+      apDungHoanThanh(res.data?.hoanThanh || { [muc.cmid]: { daHoanThanh: daXong } });
+    },
+    [courseId, apDungHoanThanh],
+  );
+
+  // Backend đếm trên toàn khóa (cả bài trong chương đang khóa). Không có thì mới
+  // tự đếm các mục đang hiện.
+  const tienDo = useMemo(() => {
+    if (duLieu?.tienDo) return duLieu.tienDo;
+    const ds = (duLieu?.sections || []).flatMap((c) => c.modules).filter((m) => m.daHoanThanh !== undefined);
+    return ds.length ? { xong: ds.filter((m) => m.daHoanThanh).length, tong: ds.length } : null;
+  }, [duLieu]);
 
   if (dangTai) {
     return (
@@ -335,7 +484,18 @@ export default function LearnPage() {
         <AlertCircle className="mb-4 h-12 w-12 text-primary" strokeWidth={1.3} />
         <p className="mb-6 text-gray-600">{loi}</p>
         <div className="flex gap-3">
-          {biChan ? (
+          {canDangNhapLai ? (
+            <button
+              type="button"
+              onClick={async () => {
+                await logout();
+                openLogin();
+              }}
+              className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
+            >
+              Đăng nhập lại
+            </button>
+          ) : biChan ? (
             <a
               href={`tel:${CONTACT_INFO.phone.replace(/\./g, "")}`}
               className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
@@ -374,9 +534,26 @@ export default function LearnPage() {
         Quay lại khóa học
       </Link>
 
-      <h1 className="mb-6 font-heading text-2xl font-extrabold text-gray-900 md:text-3xl">
+      <h1 className="mb-2 font-heading text-2xl font-extrabold text-gray-900 md:text-3xl">
         {duLieu.title}
       </h1>
+
+      {/* Tiến độ do LMS tính. Khóa chưa bật theo dõi hoàn thành thì không hiện. */}
+      {tienDo ? (
+        <div className="mb-6 flex max-w-md items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-200">
+            <div
+              className="h-full rounded-full bg-green-600 transition-all"
+              style={{ width: `${Math.round((tienDo.xong * 100) / tienDo.tong)}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-sm text-gray-500">
+            Đã hoàn thành <b className="text-gray-900">{tienDo.xong}</b>/{tienDo.tong}
+          </span>
+        </div>
+      ) : (
+        <div className="mb-6" />
+      )}
 
       {!coNoiDung ? (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-10 text-center text-gray-500">
@@ -389,9 +566,25 @@ export default function LearnPage() {
             <div className="space-y-5">
               {duLieu.sections.map((chuong, i) => (
                 <div key={i}>
-                  <p className="mb-2 px-1 font-heading text-sm font-bold text-gray-900">
+                  <p
+                    className={`mb-2 px-1 font-heading text-sm font-bold ${
+                      chuong.khoa ? "text-gray-400" : "text-gray-900"
+                    }`}
+                  >
                     {chuong.name}
                   </p>
+
+                  {/* Chương bị khóa: Moodle không cho biết bên trong có bài gì, chỉ
+                      báo điều kiện để mở. */}
+                  {chuong.khoa && (
+                    <div className="mx-1 mb-2 flex items-start gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50/70 px-3 py-2 text-xs leading-relaxed text-gray-500">
+                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                      <span>
+                        <span className="font-semibold text-gray-600">Điều kiện mở: </span>
+                        {chuong.lyDoKhoa}
+                      </span>
+                    </div>
+                  )}
                   <ul className="space-y-1">
                     {chuong.modules.map((muc) => {
                       const dangChon = muc.cmid === cmidDangChon;
@@ -410,7 +603,14 @@ export default function LearnPage() {
                               muc={muc}
                               className="mt-0.5 h-4 w-4 shrink-0"
                             />
-                            <span className="min-w-0 flex-1">{muc.name}</span>
+                            <span className={`min-w-0 flex-1 ${muc.khoa ? "text-gray-400" : ""}`}>
+                              {muc.name}
+                            </span>
+
+                            {/* Chưa đủ điều kiện mở (Hạn chế truy cập bên LMS). */}
+                            {muc.khoa && (
+                              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                            )}
 
                             {/* Cờ hoàn thành do Moodle ghi nhận. Khóa nào chưa bật
                                 theo dõi hoàn thành thì không có trường này. */}
@@ -432,7 +632,7 @@ export default function LearnPage() {
 
           {/* Khung học */}
           <main className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:p-7">
-            <NoiDungMuc muc={mucDangChon} courseId={courseId} />
+            <NoiDungMuc muc={mucDangChon} courseId={courseId} onDanhDau={danhDauThuCong} />
           </main>
         </div>
       )}

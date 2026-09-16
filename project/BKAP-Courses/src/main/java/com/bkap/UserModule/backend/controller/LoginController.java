@@ -65,8 +65,11 @@ public class LoginController {
 
 		Map<String, Object> phanHoi = new HashMap<>();
 		phanHoi.put("user", thongTin);
-		phanHoi.put("token", jwtUtil.generateToken(nguoiDung.username(), vaiTro));
-		phanHoi.put("refreshToken", jwtUtil.taoRefreshToken(nguoiDung.username(), nguoiDung.laAdmin()));
+		// Token LMS của học viên đi kèm cả hai vé (đã mã hóa) — cần cho làm bài
+		// kiểm tra ngay trên buni. Xem ghi chú ở JwtUtil.generateToken.
+		String tokenLms = jwtUtil.maHoaTokenLms(nguoiDung.tokenLms());
+		phanHoi.put("token", jwtUtil.generateToken(nguoiDung.username(), vaiTro, tokenLms));
+		phanHoi.put("refreshToken", jwtUtil.taoRefreshToken(nguoiDung.username(), nguoiDung.laAdmin(), tokenLms));
 		return ResponseEntity.ok(phanHoi);
 	}
 

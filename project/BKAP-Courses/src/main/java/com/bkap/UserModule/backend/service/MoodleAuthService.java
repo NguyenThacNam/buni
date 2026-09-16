@@ -28,8 +28,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class MoodleAuthService {
 
 	/** Thông tin người dùng lấy từ LMS. */
+	/**
+	 * @param tokenLms token Moodle CỦA CHÍNH người dùng (dịch vụ BuniLogin) — dùng
+	 *                 để làm bài kiểm tra dưới đúng tên họ. Đừng ghi ra log.
+	 */
 	public record NguoiDungLms(int id, String username, String hoTen, String email, boolean laAdmin, long lanTruyCapDau,
-			long lanTruyCapCuoi) {
+			long lanTruyCapCuoi, String tokenLms) {
 	}
 
 	@Autowired
@@ -112,7 +116,7 @@ public class MoodleAuthService {
 		}
 
 		return new NguoiDungLms(s.path("userid").asInt(), username, s.path("fullname").asText(username), email,
-				s.path("userissiteadmin").asBoolean(false), dau, cuoi);
+				s.path("userissiteadmin").asBoolean(false), dau, cuoi, tokenNguoiDung);
 	}
 
 	/** Hồ sơ người dùng, tra bằng token quản trị. Null nếu bên LMS không có. */

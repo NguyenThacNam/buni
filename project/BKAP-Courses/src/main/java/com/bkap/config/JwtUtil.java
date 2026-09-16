@@ -43,9 +43,26 @@ public class JwtUtil {
 
 	// Tạo access token từ username + role
 	public String generateToken(String username, String role) {
+		return generateToken(username, role, null);
+	}
+
+	/**
+	 * Access token kèm token LMS của chính người dùng (đã mã hóa).
+	 *
+	 * Làm bài kiểm tra ngay trên buni cần token Moodle CỦA HỌC VIÊN: các hàm làm
+	 * bài chạy dưới danh nghĩa chủ token, dùng token dịch vụ thì mọi lượt làm đều
+	 * ghi sang tên tài khoản dịch vụ. Token đó lấy được lúc đăng nhập; không có
+	 * CSDL để cất, nên gói vào vé phiên — nhưng MÃ HÓA, vì JWT chỉ ký chứ không
+	 * giấu nội dung: ai mở DevTools cũng giải base64 đọc được.
+	 */
+	public String generateToken(String username, String role, String tokenLmsMaHoa) {
 		long hetHan = System.currentTimeMillis() + soPhutHieuLuc * 60 * 1000;
-		return Jwts.builder().setSubject(username).claim("role", role).setIssuedAt(new Date())
-				.setExpiration(new Date(hetHan)).signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
+		io.jsonwebtoken.JwtBuilder b = Jwts.builder().setSubject(username).claim("role", role).setIssuedAt(new Date())
+				.setExpiration(new Date(hetHan));
+		if (tokenLmsMaHoa != null) {
+			b.claim("lms", tokenLmsMaHoa);
+		}
+		return b.signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
 	}
 
 	/**
@@ -67,10 +84,77 @@ public class JwtUtil {
 	 * LMS xong người ta vẫn cầm vé cũ vào được cả tuần.
 	 */
 	public String taoRefreshToken(String username, boolean laAdmin) {
+		return taoRefreshToken(username, laAdmin, null);
+	}
+
+	/** Vé làm mới mang theo token LMS đã mã hóa, để access token cấp lại vẫn làm bài được. */
+	public String taoRefreshToken(String username, boolean laAdmin, String tokenLmsMaHoa) {
 		long hetHan = System.currentTimeMillis() + soNgayLamMoi * 24 * 60 * 60 * 1000;
-		return Jwts.builder().setSubject(username).claim("muc_dich", "lam_moi")
-				.claim("role", laAdmin ? "ADMIN" : "STUDENT").setIssuedAt(new Date()).setExpiration(new Date(hetHan))
-				.signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
+		io.jsonwebtoken.JwtBuilder b = Jwts.builder().setSubject(username).claim("muc_dich", "lam_moi")
+				.claim("role", laAdmin ? "ADMIN" : "STUDENT").setIssuedAt(new Date()).setExpiration(new Date(hetHan));
+		if (tokenLmsMaHoa != null) {
+			b.claim("lms", tokenLmsMaHoa);
+		}
+		return b.signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
+	}
+
+	/** Phần token LMS (vẫn đang mã hóa) nằm trong một vé, để chuyển sang vé mới. */
+	public String docTokenLmsMaHoa(String jwt) {
+		try {
+			return getClaims(jwt).get("lms", String.class);
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	/** Token LMS đã giải mã từ access token hoặc vé làm mới; null nếu không có hoặc hỏng. */
+	public String docTokenLms(String jwt) {
+		return giaiMaTokenLms(docTokenLmsMaHoa(jwt));
+	}
+
+	// ─── Mã hóa token LMS ────────────────────────────────────────────────────
+	// AES-256-GCM: vừa giấu nội dung, vừa phát hiện bị sửa. Khóa dẫn xuất từ
+	// app.jwt.secret nên không phải cấu hình thêm bí mật mới; đổi khóa ký JWT
+	// là token LMS cũ cũng mất hiệu lực theo — đúng ý muốn.
+
+	private javax.crypto.spec.SecretKeySpec khoaMaHoaTokenLms() throws Exception {
+		byte[] bam = java.security.MessageDigest.getInstance("SHA-256")
+				.digest(("buni-lms-token:" + secret).getBytes(StandardCharsets.UTF_8));
+		return new javax.crypto.spec.SecretKeySpec(bam, "AES");
+	}
+
+	public String maHoaTokenLms(String tokenLms) {
+		if (tokenLms == null || tokenLms.isBlank()) {
+			return null;
+		}
+		try {
+			byte[] iv = new byte[12];
+			new java.security.SecureRandom().nextBytes(iv);
+			javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+			c.init(javax.crypto.Cipher.ENCRYPT_MODE, khoaMaHoaTokenLms(), new javax.crypto.spec.GCMParameterSpec(128, iv));
+			byte[] ma = c.doFinal(tokenLms.getBytes(StandardCharsets.UTF_8));
+			byte[] goi = new byte[iv.length + ma.length];
+			System.arraycopy(iv, 0, goi, 0, iv.length);
+			System.arraycopy(ma, 0, goi, iv.length, ma.length);
+			return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(goi);
+		} catch (Exception e) {
+			throw new IllegalStateException("Không mã hóa được token LMS", e);
+		}
+	}
+
+	private String giaiMaTokenLms(String goiBase64) {
+		if (goiBase64 == null || goiBase64.isBlank()) {
+			return null;
+		}
+		try {
+			byte[] goi = java.util.Base64.getUrlDecoder().decode(goiBase64);
+			javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+			c.init(javax.crypto.Cipher.DECRYPT_MODE, khoaMaHoaTokenLms(),
+					new javax.crypto.spec.GCMParameterSpec(128, goi, 0, 12));
+			return new String(c.doFinal(goi, 12, goi.length - 12), StandardCharsets.UTF_8);
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	/**

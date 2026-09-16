@@ -67,8 +67,11 @@ public class AuthTokenController {
 		String vaiTro = jwtUtil.docVaiTroTuRefreshToken(veCu);
 
 		Map<String, Object> phanHoi = new HashMap<>();
-		phanHoi.put("token", jwtUtil.generateToken(username, vaiTro));
-		phanHoi.put("refreshToken", jwtUtil.taoRefreshToken(username, "ADMIN".equals(vaiTro)));
+		// Chuyển nguyên phần token LMS (vẫn mã hóa) sang vé mới, để làm bài kiểm
+		// tra không bị gián đoạn khi access token 15 phút hết hạn giữa chừng.
+		String tokenLms = jwtUtil.docTokenLmsMaHoa(veCu);
+		phanHoi.put("token", jwtUtil.generateToken(username, vaiTro, tokenLms));
+		phanHoi.put("refreshToken", jwtUtil.taoRefreshToken(username, "ADMIN".equals(vaiTro), tokenLms));
 		return ResponseEntity.ok(phanHoi);
 	}
 

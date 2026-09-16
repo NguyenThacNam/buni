@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,10 +32,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bkap.CoursesModule.backend.service.LmsCatalogService;
 import com.bkap.CoursesModule.backend.service.LmsTienDoService;
+import com.bkap.CoursesModule.backend.service.LmsTienDoService.TrangThaiMuc;
 import com.bkap.CoursesModule.backend.service.LmsContentService;
 import com.bkap.CoursesModule.backend.service.LmsSsoService;
 import com.bkap.config.JwtUtil;
 import com.bkap.config.MoodleConfig;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -175,7 +179,17 @@ public class LearnController {
 
 	/** courseId là id khóa học bên LMS. */
 	@GetMapping("/{courseId}")
-	public ResponseEntity<?> layNoiDung(@PathVariable Integer courseId, Authentication authentication) {
+	public ResponseEntity<?> layNoiDung(@PathVariable Integer courseId,
+			@RequestHeader(value = "Authorization", required = false) String auth, Authentication authentication) {
+		// Nội dung phải hỏi bằng token LMS của chính người học để Moodle áp hạn chế
+		// truy cập. Phiên cũ không mang token thì bắt đăng nhập lại, KHÔNG lùi về
+		// token dịch vụ — lùi về là lộ luôn các bài đang bị khóa.
+		String jwt = auth != null && auth.startsWith("Bearer ") ? auth.substring(7) : null;
+		String tokenHv = jwt == null ? null : jwtUtil.docTokenLms(jwt);
+		if (tokenHv == null) {
+			return ResponseEntity.status(403).body(Map.of("error",
+					"Phiên đăng nhập đã cũ. Vui lòng đăng nhập lại để vào học.", "ma", "CAN_DANG_NHAP_LAI"));
+		}
 		try {
 			Map<String, Object> khoa = lmsCatalogService.chiTietKhoa(courseId);
 			if (khoa == null) {
@@ -185,13 +199,21 @@ public class LearnController {
 				return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
 			}
 
-			Map<String, Object> noiDung = lmsContentService.layNoiDung(courseId, String.valueOf(khoa.get("title")));
+			Map<String, Object> noiDung = lmsContentService.layNoiDung(courseId, String.valueOf(khoa.get("title")),
+					tokenHv);
 
 			// Đánh dấu mục đã hoàn thành và điểm bài kiểm tra của chính người đang xem.
 			Integer idNguoiHoc = lmsSsoService.idTaiKhoanLms(authentication.getName());
 			if (idNguoiHoc != null) {
-				ganTienDo(noiDung, lmsTienDoService.trangThaiHoanThanh(courseId, idNguoiHoc),
-						lmsTienDoService.diemBaiKiemTra(courseId, idNguoiHoc));
+				Map<Integer, TrangThaiMuc> hoanThanh = lmsTienDoService.chiTietHoanThanh(courseId, idNguoiHoc);
+				ganTienDo(noiDung, hoanThanh, lmsTienDoService.diemBaiKiemTra(courseId, idNguoiHoc));
+
+				// Đếm trên toàn khóa, kể cả bài nằm trong chương đang khóa (học viên
+				// không thấy danh sách bài đó, nhưng vẫn phải tính vào tổng).
+				if (!hoanThanh.isEmpty()) {
+					long xong = hoanThanh.values().stream().filter(TrangThaiMuc::xong).count();
+					noiDung.put("tienDo", Map.of("xong", xong, "tong", hoanThanh.size()));
+				}
 			}
 
 			// Ký sẵn đường dẫn cho từng file, để frontend nhúng thẳng vào thẻ
@@ -211,21 +233,98 @@ public class LearnController {
 
 	/** Gắn cờ hoàn thành và điểm vào từng mục trong cấu trúc khóa học. */
 	@SuppressWarnings("unchecked")
-	private void ganTienDo(Map<String, Object> noiDung, Map<Integer, Boolean> hoanThanh, Map<Integer, String> diem) {
+	private void ganTienDo(Map<String, Object> noiDung, Map<Integer, TrangThaiMuc> hoanThanh,
+			Map<Integer, String> diem) {
 		for (Map<String, Object> chuong : (List<Map<String, Object>>) noiDung.get("sections")) {
 			for (Map<String, Object> muc : (List<Map<String, Object>>) chuong.get("modules")) {
 				Object cmid = muc.get("cmid");
 				if (cmid == null) {
 					continue;
 				}
-				if (hoanThanh.containsKey(cmid)) {
-					muc.put("daHoanThanh", hoanThanh.get(cmid));
+				TrangThaiMuc t = hoanThanh.get(cmid);
+				if (t != null) {
+					muc.put("daHoanThanh", t.xong());
+					muc.put("tuDanhDau", t.tuDanhDau());
+					muc.put("canXem", t.canXem());
+					muc.put("daXem", t.daXem());
 				}
 				if (diem.containsKey(cmid)) {
 					muc.put("diem", diem.get(cmid));
 				}
 			}
 		}
+	}
+
+	// ─────────────────────────────────────────────────────────────
+	// GHI NHẬN HOÀN THÀNH
+	// ─────────────────────────────────────────────────────────────
+
+	/**
+	 * Học viên vừa mở một mục trên buni — báo Moodle "đã xem" để tính hoàn thành.
+	 *
+	 * @return trạng thái hoàn thành mới của cả khóa, để giao diện cập nhật dấu tích
+	 */
+	@PostMapping("/{courseId}/modules/{cmid}/viewed")
+	public ResponseEntity<?> daXem(@PathVariable int courseId, @PathVariable int cmid,
+			@RequestHeader("Authorization") String auth, Authentication authentication) {
+		return ghiNhan(courseId, cmid, auth, authentication, lmsTienDoService::baoDaXem);
+	}
+
+	/** Học viên tự đánh dấu đã học. Body: {"completed": true|false} */
+	@PutMapping("/{courseId}/modules/{cmid}/completion")
+	public ResponseEntity<?> danhDau(@PathVariable int courseId, @PathVariable int cmid,
+			@RequestBody Map<String, Object> body, @RequestHeader("Authorization") String auth,
+			Authentication authentication) {
+		boolean daXong = Boolean.TRUE.equals(body.get("completed"));
+		return ghiNhan(courseId, cmid, auth, authentication, (tk, hoatDong) -> {
+			lmsTienDoService.danhDauThuCong(tk, cmid, daXong);
+			return true;
+		});
+	}
+
+	private interface ViecGhiNhan {
+		boolean lam(String tokenHocVien, JsonNode hoatDong);
+	}
+
+	private ResponseEntity<?> ghiNhan(int courseId, int cmid, String auth, Authentication authentication,
+			ViecGhiNhan viec) {
+		String jwt = auth != null && auth.startsWith("Bearer ") ? auth.substring(7) : null;
+		String tokenHv = jwt == null ? null : jwtUtil.docTokenLms(jwt);
+		if (tokenHv == null) {
+			return ResponseEntity.status(403).body(Map.of("error",
+					"Vui lòng đăng xuất rồi đăng nhập lại để lưu tiến độ học.", "ma", "CAN_DANG_NHAP_LAI"));
+		}
+		// Loại và instance tra từ chính khóa học, không nhận từ trình duyệt.
+		JsonNode hoatDong = lmsContentService.timHoatDong(courseId, cmid);
+		if (hoatDong == null) {
+			return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy mục học này trong khóa"));
+		}
+		try {
+			if (!viec.lam(tokenHv, hoatDong)) {
+				return ResponseEntity.ok(Map.of("hoTro", false));
+			}
+		} catch (IllegalStateException e) {
+			System.err.println("[Learn] Ghi nhận hoàn thành cmid " + cmid + ": " + e.getMessage());
+			return ResponseEntity.status(409)
+					.body(Map.of("error", "Hệ thống LMS chưa ghi nhận được. Vui lòng thử lại."));
+		}
+
+		Map<String, Object> ket = new LinkedHashMap<>();
+		ket.put("hoTro", true);
+		// Lấy lại trạng thái để giao diện cập nhật dấu tích. Hỏng thì thôi — việc
+		// ghi nhận đã xong, lần tải trang sau sẽ thấy.
+		try {
+			Integer idNguoiHoc = lmsSsoService.idTaiKhoanLms(authentication.getName());
+			if (idNguoiHoc != null) {
+				Map<Integer, Map<String, Boolean>> ds = new LinkedHashMap<>();
+				lmsTienDoService.chiTietHoanThanh(courseId, idNguoiHoc)
+						.forEach((id, t) -> ds.put(id, Map.of("daHoanThanh", t.xong(), "daXem", t.daXem())));
+				ket.put("hoanThanh", ds);
+			}
+		} catch (Exception e) {
+			System.err.println("[Learn] Không lấy lại được tiến độ khóa " + courseId + ": " + e.getMessage());
+		}
+		return ResponseEntity.ok(ket);
 	}
 
 	@SuppressWarnings("unchecked")

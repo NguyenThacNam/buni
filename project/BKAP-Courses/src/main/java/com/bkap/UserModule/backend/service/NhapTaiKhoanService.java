@@ -283,9 +283,30 @@ public class NhapTaiKhoanService {
 		// và dòng trùng sẽ bị bắt muộn hơn — lúc tạo, với câu báo chung chung hơn.
 		if (moodleAuthService.timTheoEmail(email) != null) return "Email đã có tài khoản khác dùng trên LMS.";
 
-		if (!matKhau.isEmpty() && matKhau.length() < DO_DAI_MAT_KHAU_TOI_THIEU)
-			return "Mật khẩu trong file phải có ít nhất " + DO_DAI_MAT_KHAU_TOI_THIEU + " ký tự (hoặc để trống).";
+		if (!matKhau.isEmpty()) {
+			String loiMatKhau = kiemTraMatKhau(matKhau);
+			if (loiMatKhau != null) return loiMatKhau;
+		}
 		return null;
+	}
+
+	/**
+	 * Chính sách mật khẩu mặc định của Moodle: tối thiểu 8 ký tự, có chữ thường,
+	 * chữ hoa, chữ số và ký tự đặc biệt. Kiểm trước khi gửi để báo đúng thiếu gì —
+	 * để Moodle từ chối thì chỉ nhận được câu báo chung chung.
+	 *
+	 * @return câu báo lỗi, hoặc null nếu mật khẩu đạt
+	 */
+	private String kiemTraMatKhau(String matKhau) {
+		List<String> thieu = new ArrayList<>();
+		if (matKhau.length() < DO_DAI_MAT_KHAU_TOI_THIEU) thieu.add("ít nhất " + DO_DAI_MAT_KHAU_TOI_THIEU + " ký tự");
+		if (!matKhau.matches(".*[a-z].*")) thieu.add("chữ thường");
+		if (!matKhau.matches(".*[A-Z].*")) thieu.add("chữ hoa");
+		if (!matKhau.matches(".*[0-9].*")) thieu.add("chữ số");
+		if (!matKhau.matches(".*[^a-zA-Z0-9].*")) thieu.add("ký tự đặc biệt");
+		if (thieu.isEmpty()) return null;
+		return "Mật khẩu trong file chưa đạt, còn thiếu: " + String.join(", ", thieu)
+				+ ". (Hoặc để trống để hệ thống tự sinh.)";
 	}
 
 	/** Ghi danh vào khóa đã chọn. Hỏng thì ghi chú lại, không làm hỏng cả dòng. */

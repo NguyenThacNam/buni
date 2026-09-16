@@ -31,6 +31,8 @@ const About = lazy(() => import("./pages/About"));
 const Contact = lazy(() => import("./pages/Contact"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const LearnPage = lazy(() => import("./pages/LearnPage"));
+const QuizLamBaiPage = lazy(() => import("./pages/quiz/QuizLamBaiPage"));
+const QuizKetQuaPage = lazy(() => import("./pages/quiz/QuizKetQuaPage"));
 
 // Dashboard Pages (lazy-load)
 const DashboardLayout = lazy(() => import("./pages/dashboard/DashboardLayout"));
@@ -115,6 +117,26 @@ function AnimatedRoutes() {
             <ProtectedRoute>
               <PageTransition>
                 <LearnPage />
+              </PageTransition>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Làm bài kiểm tra ngay trên buni — điểm do LMS chấm */}
+        <Route
+          path="/hoc/:courseId/kiem-tra/:cmid/lam/:attemptId"
+          element={
+            <ProtectedRoute>
+              <QuizLamBaiPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/hoc/:courseId/kiem-tra/:cmid/ket-qua/:attemptId"
+          element={
+            <ProtectedRoute>
+              <PageTransition>
+                <QuizKetQuaPage />
               </PageTransition>
             </ProtectedRoute>
           }

@@ -114,9 +114,20 @@ public class UserController {
 				&& a.getAuthorities().stream().anyMatch(x -> "ROLE_ADMIN".equals(x.getAuthority())) ? "ADMIN"
 						: "STUDENT";
 
+		// Xin lại token LMS bằng mật khẩu mới, phòng khi Moodle hủy token cũ lúc đổi
+		// mật khẩu. Không xin được thì thôi — chỉ ảnh hưởng làm bài kiểm tra, người
+		// dùng đăng nhập lại là có.
+		String tokenLms = null;
+		try {
+			tokenLms = jwtUtil.maHoaTokenLms(
+					moodleAuthService.dangNhap(principal.getName(), body.get("newPassword").trim()).tokenLms());
+		} catch (Exception e) {
+			System.err.println("[User] Không xin lại được token LMS sau khi đổi mật khẩu: " + e.getMessage());
+		}
+
 		return ResponseEntity.ok(Map.of("message", "Đã đổi mật khẩu", "token",
-				jwtUtil.generateToken(principal.getName(), vaiTro), "refreshToken",
-				jwtUtil.taoRefreshToken(principal.getName(), "ADMIN".equals(vaiTro))));
+				jwtUtil.generateToken(principal.getName(), vaiTro, tokenLms), "refreshToken",
+				jwtUtil.taoRefreshToken(principal.getName(), "ADMIN".equals(vaiTro), tokenLms)));
 	}
 
 }

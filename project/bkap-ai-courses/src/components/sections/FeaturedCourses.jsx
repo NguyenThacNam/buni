@@ -30,7 +30,7 @@ export default function FeaturedCourses() {
         const data = Array.isArray(res.data) ? res.data : [];
         const basic = data.filter((c) => c.isPro === 0 || !c.isPro);
         const pro = data.filter((c) => c.isPro === 1);
-        setBasicCourses(basic.slice(0, 4)); // Lấy 4 khóa cơ bản
+        setBasicCourses(basic.slice(0, 3)); // Lấy 3 khóa cơ bản — vừa đúng một hàng 3 cột
         setProCourses(pro.slice(0, 4));     // Lấy 4 khóa pro
       })
       .catch((err) => {
@@ -65,8 +65,8 @@ export default function FeaturedCourses() {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {[...Array(4)].map((_, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[...Array(3)].map((_, i) => (
                 <SkeletonCard key={i} />
               ))}
             </div>
@@ -86,7 +86,7 @@ export default function FeaturedCourses() {
               initial="hidden"
               whileInView="show"
               viewport={{ once: true, amount: 0.1 }}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
             >
               {basicCourses.map((course) => (
                 <motion.div key={course.id} variants={cardVariant}>
