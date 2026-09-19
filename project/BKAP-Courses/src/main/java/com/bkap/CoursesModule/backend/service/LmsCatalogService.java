@@ -76,6 +76,56 @@ public class LmsCatalogService {
 		return demKhoaHoc.lay(giayGiuDem * 1000, this::napKhoaHoc);
 	}
 
+	/**
+	 * Một khóa kèm những số liệu phải hỏi Moodle riêng — dùng cho trang giới thiệu
+	 * khóa, nơi chỉ xem một khóa nên thêm một lời gọi cũng không sao.
+	 *
+	 * Không nhét thẳng vào bộ đệm danh sách: số học viên đổi theo từng lần ghi
+	 * danh, còn bộ đệm kia giữ chung cho mọi người xem.
+	 */
+	public Map<String, Object> chiTietKhoaDayDu(int id) throws Exception {
+		Map<String, Object> khoa = chiTietKhoa(id);
+		if (khoa == null) {
+			return null;
+		}
+		Map<String, Object> ket = new LinkedHashMap<>(khoa);
+		ket.put("studentCount", soHocVien(id));
+		return ket;
+	}
+
+	/**
+	 * Số người đang được ghi danh khóa này, hoặc null nếu Moodle không cho hỏi.
+	 *
+	 * Cần hàm core_enrol_get_enrolled_users trong dịch vụ TokenBuni. Thiếu thì trả
+	 * null và giao diện ẩn dòng này, chứ không hiện 0 cho khóa đang có người học.
+	 */
+	private Integer soHocVien(int moodleCourseId) {
+		try {
+			// Chỉ xin id và vai trò: danh sách có cả họ tên và email, kéo về đầy đủ
+			// chỉ để đếm là thừa. Không dùng tùy chọn "onlyactive" — nó đòi thêm quyền
+			// xem cách ghi danh, tài khoản dịch vụ không có nên Moodle từ chối cả lời gọi.
+			JsonNode r = goiMoodle("core_enrol_get_enrolled_users", "&courseid=" + moodleCourseId
+					+ "&options[0][name]=userfields&options[0][value]=id,roles");
+			if (!r.isArray()) {
+				return null;
+			}
+			// Chỉ đếm vai trò học viên: danh sách ghi danh có cả giảng viên.
+			int dem = 0;
+			for (JsonNode nguoi : r) {
+				for (JsonNode vaiTro : nguoi.path("roles")) {
+					if ("student".equals(vaiTro.path("shortname").asText())) {
+						dem++;
+						break;
+					}
+				}
+			}
+			return dem;
+		} catch (Exception e) {
+			System.err.println("[LmsCatalog] Không đếm được học viên khóa " + moodleCourseId + ": " + e.getMessage());
+			return null;
+		}
+	}
+
 	/** Một khóa theo id Moodle, hoặc null nếu không có / đang ẩn. */
 	public Map<String, Object> chiTietKhoa(int id) throws Exception {
 		// Lấy từ danh sách đã đệm thay vì gọi Moodle lần nữa: người xem thường
@@ -145,10 +195,10 @@ public class LmsCatalogService {
 		k.put("originalPrice", null);
 		k.put("rating", 0);
 		k.put("ratingCount", 0);
-		k.put("studentCount", 0);
+		k.put("studentCount", null);
 		k.put("isPro", 0);
 		k.put("level", null);
-		k.put("durationText", null);
+		k.put("durationText", thoiLuong(c));
 		k.put("previewVideoUrl", null);
 		return k;
 	}
@@ -167,6 +217,41 @@ public class LmsCatalogService {
 		}
 		Matcher m = DUONG_DAN_FILE.matcher(url);
 		return m.find() ? "/api/v1/learn/file?t=" + jwtUtil.kyDuongDanFile(m.group(1)) : null;
+	}
+
+	/**
+	 * Thời lượng khóa, lấy theo thứ tự:
+	 *
+	 * 1. Trường khóa học tùy chỉnh tên "thoiluong" / "duration" bên Moodle — giáo
+	 *    vụ gõ sao hiện vậy, vd "12 buổi".
+	 * 2. Khoảng cách ngày bắt đầu → ngày kết thúc trong Cài đặt khóa học.
+	 *
+	 * Không có cái nào thì trả null và giao diện ẩn dòng thời lượng, chứ không
+	 * hiện dấu gạch trống như trước.
+	 */
+	private String thoiLuong(JsonNode c) {
+		for (JsonNode f : c.path("customfields")) {
+			String ten = f.path("shortname").asText("").toLowerCase();
+			String giaTri = f.path("value").asText("").replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+			if ((ten.contains("thoiluong") || ten.contains("thoi_luong") || ten.contains("duration"))
+					&& !giaTri.isEmpty()) {
+				return giaTri;
+			}
+		}
+
+		long batDau = c.path("startdate").asLong(0);
+		long ketThuc = c.path("enddate").asLong(0);
+		if (batDau <= 0 || ketThuc <= batDau) {
+			return null;
+		}
+		long soNgay = Math.round((ketThuc - batDau) / 86400.0);
+		if (soNgay < 14) {
+			return soNgay + " ngày";
+		}
+		if (soNgay < 90) {
+			return Math.round(soNgay / 7.0) + " tuần";
+		}
+		return Math.round(soNgay / 30.0) + " tháng";
 	}
 
 	/** Giáo viên đứng lớp, lấy từ danh sách liên hệ của khóa bên Moodle. */

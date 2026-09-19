@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   ArrowLeft,
+  CalendarCheck,
   Check,
   CheckCircle2,
   Circle,
@@ -18,6 +19,8 @@ import {
 import { api } from "../api/Api";
 import { useAuth } from "../context/AuthContext";
 import QuizGioiThieu from "../components/quiz/QuizGioiThieu";
+import XemPdf from "../components/learn/XemPdf";
+import BangDiemDanh from "../components/learn/BangDiemDanh";
 import { API_BASE_URL, CONTACT_INFO, LMS_URL } from "../data/constants";
 
 /**
@@ -78,6 +81,7 @@ function BieuTuongMuc({ muc, className }) {
   }
   if (muc.type === "quiz") return <ClipboardList className={className} />;
   if (muc.type === "forum") return <MessageSquare className={className} />;
+  if (muc.type === "attendance") return <CalendarCheck className={className} />;
   return <ExternalLink className={className} />;
 }
 
@@ -86,6 +90,7 @@ const NHAN_LOAI = {
   page: "Bài học",
   quiz: "Bài kiểm tra",
   forum: "Diễn đàn",
+  attendance: "Điểm danh",
   assign: "Bài tập nộp",
 };
 
@@ -241,14 +246,10 @@ function NoiDungMuc({ muc, courseId, onDanhDau }) {
         </video>
       )}
 
-      {/* PDF/slide: nhúng để đọc ngay, khỏi phải tải rồi mở bằng phần mềm khác. */}
+      {/* PDF/slide: buni tự dựng từng trang bằng pdf.js. Dùng iframe thì trình
+          xem PDF của trình duyệt luôn kèm nút Tải về và In, không tắt được. */}
       {muc.type === "resource" && laPdf(muc) && (
-        <iframe
-          key={fileUrl}
-          src={fileUrl}
-          title={muc.name}
-          className="h-[75vh] w-full rounded-xl border border-gray-200 bg-gray-50"
-        />
+        <XemPdf key={fileUrl} url={fileUrl} ten={muc.filename || muc.name} />
       )}
 
       {/* Định dạng còn lại (docx, xlsx, zip...): trình duyệt không xem trực tiếp
@@ -299,6 +300,9 @@ function NoiDungMuc({ muc, courseId, onDanhDau }) {
       {/* Kiểm tra, diễn đàn, bài nộp: mở sang LMS. Điểm và lượt làm bài do
           Moodle quản lý, làm lại ở buni sẽ lệch dữ liệu. */}
       {/* Bài kiểm tra: làm ngay trên buni, điểm do LMS chấm. */}
+      {/* Điểm danh: bảng chuyên cần của chính học viên, lấy từ LMS. */}
+      {muc.type === "attendance" && <BangDiemDanh courseId={courseId} cmid={muc.cmid} />}
+
       {muc.type === "quiz" && (
         <QuizGioiThieu
           courseId={courseId}
@@ -631,7 +635,9 @@ export default function LearnPage() {
           </aside>
 
           {/* Khung học */}
-          <main className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:p-7">
+          {/* min-w-0: ô lưới mặc định rộng theo nội dung bên trong. Trang PDF
+              phóng to 250% mà thiếu dòng này thì kéo cả cột phình ra ngoài trang. */}
+          <main className="min-w-0 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:p-7">
             <NoiDungMuc muc={mucDangChon} courseId={courseId} onDanhDau={danhDauThuCong} />
           </main>
         </div>

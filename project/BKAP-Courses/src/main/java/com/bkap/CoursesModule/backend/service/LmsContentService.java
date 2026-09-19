@@ -107,7 +107,7 @@ public class LmsContentService {
 			}
 
 			Map<String, Object> mapChuong = new LinkedHashMap<>();
-			mapChuong.put("name", c.path("name").asText(""));
+			mapChuong.put("name", giaiMa(c.path("name").asText("")));
 			if (chuongBiKhoa) {
 				mapChuong.put("khoa", true);
 				mapChuong.put("lyDoKhoa", lyDoChuong.isEmpty() ? "Chương này chưa mở cho bạn." : lyDoChuong);
@@ -125,13 +125,45 @@ public class LmsContentService {
 	}
 
 	/**
+	 * Chương trình học của khóa: tên chương và tên từng bài, KHÔNG kèm file hay
+	 * nội dung. Dùng cho trang giới thiệu khóa, nơi khách chưa đăng nhập cũng xem
+	 * được — nên hỏi bằng token dịch vụ và chỉ lấy đúng phần tên.
+	 */
+	public List<Map<String, Object>> daiCuong(int moodleCourseId) throws Exception {
+		JsonNode chuong = goiMoodle("core_course_get_contents", "&courseid=" + moodleCourseId);
+		List<Map<String, Object>> ds = new ArrayList<>();
+		for (JsonNode c : chuong) {
+			List<Map<String, Object>> dsBai = new ArrayList<>();
+			for (JsonNode m : c.path("modules")) {
+				String loai = m.path("modname").asText("");
+				// qbank là ngân hàng câu hỏi, không phải bài học.
+				if ("qbank".equals(loai)) {
+					continue;
+				}
+				Map<String, Object> bai = new LinkedHashMap<>();
+				bai.put("name", giaiMa(m.path("name").asText("")));
+				bai.put("type", loai);
+				dsBai.add(bai);
+			}
+			if (dsBai.isEmpty()) {
+				continue;
+			}
+			Map<String, Object> mapChuong = new LinkedHashMap<>();
+			mapChuong.put("name", giaiMa(c.path("name").asText("")));
+			mapChuong.put("modules", dsBai);
+			ds.add(mapChuong);
+		}
+		return ds;
+	}
+
+	/**
 	 * Mục chưa đủ điều kiện mở: chỉ có tên, loại và lý do — không file, không nội
 	 * dung, không đường dẫn sang LMS.
 	 */
 	private Map<String, Object> dungMucBiKhoa(JsonNode m, String lyDo) {
 		Map<String, Object> muc = new LinkedHashMap<>();
 		muc.put("type", m.path("modname").asText(""));
-		muc.put("name", m.path("name").asText(""));
+		muc.put("name", giaiMa(m.path("name").asText("")));
 		muc.put("cmid", m.path("id").asInt());
 		muc.put("khoa", true);
 		muc.put("lyDoKhoa", lyDo.isEmpty() ? "Mục này chưa mở cho bạn." : lyDo);
@@ -205,7 +237,7 @@ public class LmsContentService {
 
 		Map<String, Object> muc = new LinkedHashMap<>();
 		muc.put("type", loai);
-		muc.put("name", m.path("name").asText(""));
+		muc.put("name", giaiMa(m.path("name").asText("")));
 		muc.put("cmid", cmid);
 
 		switch (loai) {
@@ -233,6 +265,11 @@ public class LmsContentService {
 			if (youtube != null) {
 				muc.put("youtubeId", youtube);
 			}
+		}
+		case "attendance" -> {
+			// Điểm danh: buni tự hiện bảng chuyên cần của học viên (xem
+			// LmsDiemDanhService), không cần đường dẫn sang LMS.
+			muc.put("attendanceId", m.path("instance").asInt());
 		}
 		case "quiz", "forum", "assign" -> {
 			// Mấy loại này để Moodle lo. buni chỉ đưa đường dẫn để mở sang đó.
@@ -294,6 +331,15 @@ public class LmsContentService {
 			System.err.println("[LmsContent] Không lấy được nội dung trang: " + e.getMessage());
 		}
 		return ket;
+	}
+
+	/**
+	 * Moodle trả tên chương/tên bài đã mã hóa HTML ("&amp;" thay cho "&"). Giao diện
+	 * hiện dạng chữ thuần nên phải giải mã, không thì người xem thấy nguyên "&amp;".
+	 */
+	private String giaiMa(String s) {
+		return s == null ? "" : s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+				.replace("&quot;", "\"").replace("&#039;", "'").replace("&nbsp;", " ").trim();
 	}
 
 	private String timYoutube(String html) {

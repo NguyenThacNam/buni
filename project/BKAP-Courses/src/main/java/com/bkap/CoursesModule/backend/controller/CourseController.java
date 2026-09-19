@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bkap.CoursesModule.backend.service.LmsCatalogService;
+import com.bkap.CoursesModule.backend.service.LmsContentService;
 
 /**
  * Khóa học cho trang công khai — đọc từ LMS.
@@ -26,6 +27,9 @@ public class CourseController {
 
 	@Autowired
 	private LmsCatalogService lmsCatalogService;
+
+	@Autowired
+	private LmsContentService lmsContentService;
 
 	@GetMapping()
 	public ResponseEntity<?> getAllCourses() {
@@ -46,11 +50,26 @@ public class CourseController {
 		}
 	}
 
+	/**
+	 * Chương trình học để hiện ở trang giới thiệu khóa: tên chương, tên bài.
+	 *
+	 * Công khai như phần còn lại của /courses — chỉ có tên, không có link file hay
+	 * nội dung bài, nên khách xem được chương trình mà vẫn không học lỏm được.
+	 */
+	@GetMapping("/{id}/outline")
+	public ResponseEntity<?> getCourseOutline(@PathVariable Integer id) {
+		try {
+			return ResponseEntity.ok(lmsContentService.daiCuong(id));
+		} catch (Exception e) {
+			return loi("chương trình khóa học " + id, e);
+		}
+	}
+
 	/** id là id khóa học BÊN LMS, vì buni không còn bảng khóa học riêng. */
 	@GetMapping("/{id}")
 	public ResponseEntity<?> getCourseById(@PathVariable Integer id) {
 		try {
-			Map<String, Object> course = lmsCatalogService.chiTietKhoa(id);
+			Map<String, Object> course = lmsCatalogService.chiTietKhoaDayDu(id);
 			if (course == null) {
 				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy khóa học " + id));
 			}

@@ -7,6 +7,7 @@ import { getAllCategoriesApi } from "../../api/CourseApi";
 import { dungCayDanhMuc } from "../../utils/categoryTree";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
+import ChuongThongBao from "./ChuongThongBao";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -171,6 +172,8 @@ export default function Navbar() {
 
           {/* Auth / User Area – Desktop */}
           <div className="hidden lg:flex items-center gap-3">
+            {/* Chuông thông báo lấy từ LMS, chỉ có khi đã đăng nhập. */}
+            {user && <ChuongThongBao />}
             {user ? (
               /* Logged-in: Unified Avatar dropdown */
               <div className="relative" ref={userMenuRef}>

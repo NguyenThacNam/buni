@@ -2,26 +2,27 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  Clock,
   PlayCircle,
-  Users,
   BarChart2,
+  BookOpen,
+  Clock,
   Star,
   ChevronDown,
   ChevronUp,
-  CheckCircle2,
+  Users,
   Wifi,
-  Award,
   ChevronRight,
-  Play,
   X,
 } from "lucide-react";
-import { getCourseByIdApi, getCoursesByCategoryApi } from "../api/CourseApi";
+import {
+  getCourseByIdApi,
+  getCourseOutlineApi,
+  getCoursesByCategoryApi,
+} from "../api/CourseApi";
 import { api } from "../api/Api";
 import { CONTACT_INFO } from "../data/constants";
 import {
-  formatPrice,
-  levelLabel,
+  // eslint-disable-next-line no-unused-vars -- chỉ dùng cho hộp video giới thiệu (tạm bỏ)
   getYoutubeEmbedUrl,
   getInitials,
 } from "../utils/courseHelpers";
@@ -72,7 +73,18 @@ function StarRow({ rating, count }) {
 }
 
 // ── Accordion ─────────────────────────────────────────────────────────────────
-function AccordionItem({ title, lessonsCount, index }) {
+/** Nhãn loại bài, để người xem biết chương gồm những gì. */
+const NHAN_LOAI_BAI = {
+  resource: "Tài liệu",
+  page: "Bài học",
+  quiz: "Bài kiểm tra",
+  forum: "Diễn đàn",
+  assign: "Bài tập nộp",
+  url: "Liên kết",
+  attendance: "Điểm danh",
+};
+
+function AccordionItem({ title, lessons, index }) {
   const [open, setOpen] = useState(index === 0);
 
   return (
@@ -95,7 +107,7 @@ function AccordionItem({ title, lessonsCount, index }) {
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <span className="text-xs text-gray-400 hidden sm:block">
-            {lessonsCount} bài học
+            {lessons.length} bài học
           </span>
           {open ? (
             <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -113,19 +125,16 @@ function AccordionItem({ title, lessonsCount, index }) {
           transition={{ duration: 0.25 }}
           className="border-t border-gray-100 divide-y divide-gray-50"
         >
-          {Array.from({ length: lessonsCount }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-            >
+          {lessons.map((bai, i) => (
+            <div key={i} className="flex items-center gap-3 px-5 py-3 bg-gray-50">
               <PlayCircle
                 className="w-4 h-4 text-gray-300 flex-shrink-0"
                 strokeWidth={1.5}
               />
-              <span className="text-sm text-gray-600 flex-1">
-                Bài {i + 1}: Nội dung bài học {i + 1}
+              <span className="text-sm text-gray-600 flex-1">{bai.name}</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">
+                {NHAN_LOAI_BAI[bai.type] || ""}
               </span>
-              <span className="text-xs text-gray-400 flex-shrink-0">05:00</span>
             </div>
           ))}
         </motion.div>
@@ -135,6 +144,7 @@ function AccordionItem({ title, lessonsCount, index }) {
 }
 
 // ── Video Modal ───────────────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars -- giữ cho lúc có video giới thiệu khóa
 function VideoModal({ videoUrl, onClose }) {
   useEffect(() => {
     const h = (e) => {
@@ -199,7 +209,7 @@ function laQuanTri() {
 
 // ── Sidebar (Đã cập nhật gọi API Spring Boot chuẩn xác) ───────────────────────────
 function CourseSidebar({ course }) {
-  const [showVideo, setShowVideo] = useState(false);
+  // const [showVideo, setShowVideo] = useState(false); // hộp video giới thiệu — đã bỏ
   const { user, openLogin } = useAuth();
   const isLoggedIn = !!user;
 
@@ -236,11 +246,8 @@ function CourseSidebar({ course }) {
       conDung = false;
     };
   }, [isLoggedIn, course.id, course.moodleCourseId]);
-  const navigate = useNavigate();
 
-  const videoUrl = getYoutubeEmbedUrl(course.previewVideoUrl);
-  const isFree = course.price === 0 || !course.price;
-  const isContact = course.priceType === "CONTACT";
+  // isFree / isContact / navigate: chỉ dùng cho khối giá, đã bỏ cùng khối đó.
 
   // ─── NÚT "ĐĂNG KÝ ĐỂ LÀM BÀI KIỂM TRA" — ĐÃ BỎ (11/09/2026) ────────────────
   // Giờ admin ghi danh ở /admin/enrollment thì hệ thống đẩy ghi danh sang LMS
@@ -280,71 +287,43 @@ function CourseSidebar({ course }) {
 
   return (
     <>
-      {showVideo && (
-        <VideoModal videoUrl={videoUrl} onClose={() => setShowVideo(false)} />
-      )}
+      {/* Hộp xem video giới thiệu — ĐÃ BỎ (16/09/2026) cùng nút play trên ảnh bìa.
+          Giữ lại component VideoModal phòng khi trung tâm quay video giới thiệu. */}
 
       {/* Card sidebar */}
       <div
         className="bg-white rounded-2xl overflow-hidden"
         style={{ boxShadow: "0 4px 40px rgba(0,0,0,0.13)" }}
       >
-        {/* Thumbnail + play button */}
-        <div
-          className="relative w-full aspect-video cursor-pointer group bg-gray-900"
-          onClick={() => setShowVideo(true)}
-          role="button"
-          tabIndex={0}
-          aria-label="Xem giới thiệu khóa học"
-          onKeyDown={(e) => e.key === "Enter" && setShowVideo(true)}
-        >
+        {/* Ảnh bìa lấy từ LMS. Nút play "Xem giới thiệu khóa học" đã bỏ
+            (16/09/2026): không có video giới thiệu nên bấm vào chẳng ra gì. */}
+        <div className="relative w-full aspect-video bg-gray-900">
           <img
             src={
               course.thumbnailUrl ||
               "https://placehold.co/400x225/1e293b/white?text=BKAP+AI"
             }
             alt={course.title}
-            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+            className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-300">
-              <Play
-                className="w-6 h-6 text-gray-900 ml-0.5"
-                fill="currentColor"
-              />
-            </div>
-            <p className="text-white font-semibold text-sm drop-shadow-md">
-              Xem giới thiệu khóa học
-            </p>
-          </div>
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Price */}
+          {/* KHỐI GIÁ — ĐÃ BỎ (16/09/2026). Khóa do trung tâm cấp quyền học,
+              không bán trên web, nên ghi "Miễn phí" là sai. Học phí trao đổi khi
+              học viên liên hệ. */}
+
+          {/* Tên khóa ngay trên nút chính, vào chỗ khối giá cũ: cuộn xuống thấy
+              thẻ này đứng riêng vẫn biết đang xem khóa nào. */}
           <div>
-            <p className="text-xs text-gray-400 font-medium mb-1">
-              Chi phí khóa học
-            </p>
-            {isFree ? (
-              <p className="font-heading font-extrabold text-primary text-3xl">
-                Miễn phí
+            {course.category?.name && (
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+                {course.category.name}
               </p>
-            ) : isContact ? (
-              <p className="font-heading font-extrabold text-primary text-3xl">
-                Liên hệ
-              </p>
-            ) : (
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <p className="font-heading font-extrabold text-primary text-3xl">
-                  {formatPrice(course.price)}
-                </p>
-                {course.originalPrice > course.price && (
-                  <p className="text-gray-400 text-sm line-through">
-                    {formatPrice(course.originalPrice)}
-                  </p>
-                )}
-              </div>
             )}
+            <h2 className="font-heading text-xl font-bold leading-snug text-gray-900">
+              {course.title}
+            </h2>
           </div>
 
           {/* NÚT CHÍNH — hiện theo quyền học của người đang xem.
@@ -409,31 +388,10 @@ function CourseSidebar({ course }) {
 
           {/* Course meta */}
           <div className="space-y-2.5 pt-1 border-t border-gray-100">
+            {/* Bỏ "Trình độ", "Thời lượng" (LMS không có dữ liệu, luôn hiện "—")
+                và "Chứng chỉ hoàn thành" (trung tâm chưa cấp chứng chỉ). Thêm lại
+                được khi tạo trường khóa học tùy chỉnh bên Moodle. */}
             {[
-              {
-                icon: (
-                  <BarChart2
-                    className="w-4 h-4 text-primary"
-                    strokeWidth={1.5}
-                  />
-                ),
-                label: "Trình độ",
-                value: levelLabel[course.level] || course.level,
-              },
-              {
-                icon: (
-                  <Clock className="w-4 h-4 text-red-400" strokeWidth={1.5} />
-                ),
-                label: "Thời lượng",
-                value: course.durationText || "—",
-              },
-              {
-                icon: (
-                  <Award className="w-4 h-4 text-amber-400" strokeWidth={1.5} />
-                ),
-                label: "Chứng chỉ hoàn thành",
-                value: null,
-              },
               {
                 icon: (
                   <Wifi className="w-4 h-4 text-blue-400" strokeWidth={1.5} />
@@ -441,7 +399,39 @@ function CourseSidebar({ course }) {
                 label: "Học mọi lúc, mọi nơi",
                 value: null,
               },
-            ].map((row, i) => (
+              {
+                icon: (
+                  <Users className="w-4 h-4 text-emerald-500" strokeWidth={1.5} />
+                ),
+                label: "Học viên đang học",
+                value: course.studentCount
+                  ? course.studentCount.toLocaleString("vi-VN")
+                  : null,
+                an: !course.studentCount,
+              },
+              {
+                icon: (
+                  <Clock className="w-4 h-4 text-red-400" strokeWidth={1.5} />
+                ),
+                label: "Thời lượng",
+                value: course.durationText || null,
+                an: !course.durationText,
+              },
+              {
+                icon: (
+                  <BarChart2
+                    className="w-4 h-4 text-primary"
+                    strokeWidth={1.5}
+                  />
+                ),
+                label: "Giảng viên",
+                value: course.instructor?.fullname || null,
+                an: !course.instructor?.fullname,
+              },
+            ]
+              // Thiếu dữ liệu thì ẩn hẳn dòng, đừng hiện nhãn với dấu gạch trống.
+              .filter((row) => !row.an)
+              .map((row, i) => (
               <div
                 key={i}
                 className="flex items-center gap-2.5 text-sm text-gray-600"
@@ -510,6 +500,7 @@ export default function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [course, setCourse] = useState(null);
+  const [daiCuong, setDaiCuong] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -524,6 +515,12 @@ export default function CourseDetail() {
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
+
+    // Chương trình học: hỏng thì thôi, trang vẫn xem được phần còn lại.
+    setDaiCuong([]);
+    getCourseOutlineApi(id)
+      .then((res) => setDaiCuong(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setDaiCuong([]));
   }, [id]);
 
   if (loading) {
@@ -549,13 +546,6 @@ export default function CourseDetail() {
       </div>
     );
   }
-
-  // Fallback modules
-  const modulesFallback = [
-    { title: "Giới thiệu khóa học", lessons: 2 },
-    { title: "Kiến thức cơ bản", lessons: 5 },
-    { title: "Thực hành", lessons: 8 },
-  ];
 
   return (
     <main className="bg-gray-50 min-h-screen">
@@ -604,18 +594,16 @@ export default function CourseDetail() {
               {course.rating > 0 && (
                 <StarRow rating={course.rating} count={course.ratingCount} />
               )}
-              <span className="flex items-center gap-1.5 text-white/55 text-sm">
-                <Users className="w-4 h-4" strokeWidth={1.5} />
-                {(course.studentCount || 0).toLocaleString("vi-VN")} học viên
-              </span>
-              <span className="flex items-center gap-1.5 text-white/55 text-sm">
-                <Clock className="w-4 h-4" strokeWidth={1.5} />
-                {course.durationText || "—"}
-              </span>
-              <span className="flex items-center gap-1.5 text-white/55 text-sm">
-                <BarChart2 className="w-4 h-4" strokeWidth={1.5} />
-                {levelLabel[course.level] || course.level || "Tất cả trình độ"}
-              </span>
+              {/* Số học viên, thời lượng, trình độ đã bỏ (16/09/2026): lớp do
+                  trung tâm mở nên số học viên không nói lên điều gì, còn hai mục
+                  kia LMS không có dữ liệu. Thay bằng quy mô chương trình thật. */}
+              {daiCuong.length > 0 && (
+                <span className="flex items-center gap-1.5 text-white/55 text-sm">
+                  <BookOpen className="w-4 h-4" strokeWidth={1.5} />
+                  {daiCuong.length} chương ·{" "}
+                  {daiCuong.reduce((t, c) => t + c.modules.length, 0)} bài học
+                </span>
+              )}
               {course.isPro === 1 && (
                 <span className="bg-amber-400 text-amber-900 text-xs font-bold px-2 py-0.5 rounded-sm">
                   PRO
@@ -644,32 +632,10 @@ export default function CourseDetail() {
         <div className="grid lg:grid-cols-3 gap-8 items-start overflow-visible">
           {/* LEFT CONTENT */}
           <div className="lg:col-span-2 py-10 space-y-6">
-            {/* Bạn sẽ học được gì */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-gray-900 text-lg mb-4">
-                Bạn sẽ học được gì?
-              </h2>
-              <ul className="grid sm:grid-cols-2 gap-3">
-                {[
-                  "Hiểu sâu về công nghệ",
-                  "Làm dự án thực tế",
-                  "Tư duy giải quyết vấn đề",
-                  "Chứng chỉ hoàn thành",
-                  "Hỗ trợ việc làm sau tốt nghiệp",
-                ].map((h, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 text-sm text-gray-700"
-                  >
-                    <CheckCircle2
-                      className="w-4 h-4 text-primary flex-shrink-0 mt-0.5"
-                      strokeWidth={2}
-                    />
-                    {h}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* KHỐI "BẠN SẼ HỌC ĐƯỢC GÌ" — ĐÃ BỎ (16/09/2026). Năm gạch đầu dòng
+                đó viết cứng trong code, khóa nào cũng giống nhau và hứa cả những
+                thứ trung tâm không có (chứng chỉ, giới thiệu việc làm). Muốn có
+                lại thì viết trong phần mô tả khóa bên Moodle. */}
 
             {/* Nội dung khóa học */}
             <div className="bg-white rounded-2xl p-6 border border-gray-100">
@@ -677,14 +643,21 @@ export default function CourseDetail() {
                 Nội dung khóa học
               </h2>
               <p className="text-sm text-gray-400 mb-4">
-                {course.durationText || "—"}
+                {daiCuong.length > 0
+                  ? `${daiCuong.length} chương · ${daiCuong.reduce(
+                      (t, c) => t + c.modules.length,
+                      0,
+                    )} bài học`
+                  : "Đang cập nhật"}
               </p>
+              {/* Chương trình lấy thẳng từ LMS: tên chương và tên từng bài. Chỉ
+                  có tên — tài liệu và bài kiểm tra vẫn phải được ghi danh mới mở. */}
               <div className="space-y-3">
-                {modulesFallback.map((mod, i) => (
+                {daiCuong.map((chuong, i) => (
                   <AccordionItem
                     key={i}
-                    title={mod.title}
-                    lessonsCount={mod.lessons}
+                    title={chuong.name}
+                    lessons={chuong.modules}
                     index={i}
                   />
                 ))}
@@ -702,23 +675,9 @@ export default function CourseDetail() {
                     __html: course.description || "Nội dung đang cập nhật...",
                   }}
                 />
-                <p>
-                  With tỷ lệ <strong>75% thực hành</strong>, mỗi module đều có
-                  bài tập lab chi tiết và đồ án thực tế.
-                </p>
-                <ul className="list-none space-y-1.5">
-                  {[
-                    "Thực hành lab-guide chi tiết từng bước.",
-                    "Đồ án thực tế (e-Project) đánh giá năng lực cuối môn.",
-                    "Giảng viên là chuyên gia đang làm tại doanh nghiệp.",
-                    "Hỗ trợ giới thiệu việc làm sau khi tốt nghiệp.",
-                  ].map((t, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <span className="text-primary mt-1">•</span>
-                      {t}
-                    </li>
-                  ))}
-                </ul>
+                {/* Đoạn "75% thực hành", lab-guide, e-Project, giới thiệu việc
+                    làm — ĐÃ BỎ (16/09/2026): viết cứng cho mọi khóa và không đúng
+                    với khóa AI này. Mô tả thật lấy từ Cài đặt khóa học bên Moodle. */}
               </div>
             </div>
 

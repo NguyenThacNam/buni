@@ -1,8 +1,61 @@
 import React, { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Bell, Globe, Lock, ChevronDown } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Bell,
+  Check,
+  Globe,
+  Lock,
+  ChevronDown,
+  X,
+} from "lucide-react";
 import Toast from "../../components/dashboard/Toast";
 import { api } from "../../api/Api";
+
+/**
+ * Yêu cầu mật khẩu, đúng bằng chính sách mặc định của Moodle.
+ *
+ * Trước đây buni chỉ đòi 6 ký tự: người học gõ "123456", buni cho qua, rồi Moodle
+ * từ chối với câu báo chung chung. Giờ kiểm ngay tại chỗ và hiện từng điều kiện
+ * tích xanh dần khi gõ.
+ */
+const DIEU_KIEN = [
+  { chu: "Ít nhất 8 ký tự", dat: (mk) => mk.length >= 8 },
+  { chu: "Có chữ thường (a–z)", dat: (mk) => /[a-z]/.test(mk) },
+  { chu: "Có chữ hoa (A–Z)", dat: (mk) => /[A-Z]/.test(mk) },
+  { chu: "Có chữ số (0–9)", dat: (mk) => /[0-9]/.test(mk) },
+  {
+    chu: "Có ký tự đặc biệt (@ # $ % & *)",
+    dat: (mk) => /[^a-zA-Z0-9]/.test(mk),
+  },
+];
+
+const matKhauDat = (mk) => DIEU_KIEN.every((d) => d.dat(mk));
+
+/** Danh sách điều kiện, tự tích xanh khi gõ đúng. */
+function DanhSachDieuKien({ matKhau }) {
+  return (
+    <ul className="grid gap-1.5 rounded-xl bg-gray-50 p-3 sm:grid-cols-2">
+      {DIEU_KIEN.map((d) => {
+        const ok = d.dat(matKhau);
+        return (
+          <li
+            key={d.chu}
+            className={`flex items-center gap-1.5 text-xs ${ok ? "text-green-600" : "text-gray-400"}`}
+          >
+            {ok ? (
+              <Check style={{ width: 14, height: 14 }} strokeWidth={3} />
+            ) : (
+              <X style={{ width: 14, height: 14 }} strokeWidth={2.5} />
+            )}
+            {d.chu}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 /**
  * Toggle Switch Component đơn giản
@@ -54,7 +107,15 @@ function Section({ icon: Icon, title, children }) {
 }
 
 /** Ô nhập mật khẩu có nút ẩn/hiện. */
-function PasswordInput({ label, value, onChange, show, onToggle, placeholder, autoComplete }) {
+function PasswordInput({
+  label,
+  value,
+  onChange,
+  show,
+  onToggle,
+  placeholder,
+  autoComplete,
+}) {
   return (
     <div>
       <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
@@ -116,7 +177,11 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState("vi");
 
   // ---- Toast ----
-  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ show: true, message, type });
@@ -136,8 +201,8 @@ export default function SettingsPage() {
       showToast("Mật khẩu xác nhận không khớp!", "error");
       return;
     }
-    if (passwords.newPass.length < 6) {
-      showToast("Mật khẩu mới phải có ít nhất 6 ký tự!", "error");
+    if (!matKhauDat(passwords.newPass)) {
+      showToast("Mật khẩu mới chưa đạt yêu cầu bên dưới!", "error");
       return;
     }
 
@@ -154,12 +219,19 @@ export default function SettingsPage() {
       // thay token ngay, không thì lần gọi API tới dùng refresh token cũ (đã bị
       // thu hồi) và người dùng bị văng ra.
       if (res.data?.token) localStorage.setItem("token", res.data.token);
-      if (res.data?.refreshToken) localStorage.setItem("refreshToken", res.data.refreshToken);
+      if (res.data?.refreshToken)
+        localStorage.setItem("refreshToken", res.data.refreshToken);
 
       setPasswords({ current: "", newPass: "", confirm: "" });
-      showToast("Đổi mật khẩu thành công! Các thiết bị khác đã được đăng xuất. 🔐");
+      showToast(
+        "Đổi mật khẩu thành công! Các thiết bị khác đã được đăng xuất. 🔐",
+      );
     } catch (err) {
-      showToast(err?.response?.data?.error || "Chưa đổi được mật khẩu. Vui lòng thử lại!", "error");
+      showToast(
+        err?.response?.data?.error ||
+          "Chưa đổi được mật khẩu. Vui lòng thử lại!",
+        "error",
+      );
     } finally {
       setDangDoiMatKhau(false);
     }
@@ -172,8 +244,6 @@ export default function SettingsPage() {
   const handleSaveLanguage = () => {
     showToast("Ngôn ngữ đã được cập nhật! 🌐");
   };
-
-
 
   return (
     <>
@@ -188,7 +258,7 @@ export default function SettingsPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className="space-y-6 max-w-2xl"
+        className="max-w-5xl space-y-6"
       >
         {/* Tiêu đề */}
         <div>
@@ -200,127 +270,150 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* ---- SECTION 1: Đổi mật khẩu ---- */}
-        <Section icon={Lock} title="Đổi mật khẩu">
-          <form onSubmit={handleSavePassword} className="space-y-4">
-            {[
-              ["current", "Mật khẩu hiện tại", "••••••••", "current-password"],
-              ["newPass", "Mật khẩu mới", "Tối thiểu 6 ký tự", "new-password"],
-              ["confirm", "Xác nhận mật khẩu mới", "Nhập lại mật khẩu mới", "new-password"],
-            ].map(([field, label, placeholder, autoComplete]) => (
-              <PasswordInput
-                key={field}
-                label={label}
-                placeholder={placeholder}
-                autoComplete={autoComplete}
-                value={passwords[field]}
-                onChange={(v) => setPasswords((p) => ({ ...p, [field]: v }))}
-                show={showPasswords[field]}
-                onToggle={() => toggleShow(field)}
-              />
-            ))}
-            <div className="flex justify-end pt-1">
-              <button
-                type="submit"
-                disabled={dangDoiMatKhau}
-                className="px-6 py-2.5 rounded-xl text-white font-bold text-sm shadow hover:opacity-90 active:scale-95 transition-all duration-200 disabled:opacity-60"
-                style={{ background: "#DC2626" }}
-              >
-                {dangDoiMatKhau ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
-              </button>
-            </div>
-          </form>
-        </Section>
-
-        {/* ---- SECTION 2: Thông báo ---- */}
-        <Section icon={Bell} title="Cài đặt thông báo">
-          <div className="space-y-5">
-            {/* Toggle 1 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-700">
-                  Email thông báo khóa học mới
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Nhận email khi có khóa học mới phù hợp với bạn
-                </p>
-              </div>
-              <ToggleSwitch
-                id="toggle-email-new-course"
-                checked={notifications.emailNewCourse}
-                onChange={(v) =>
-                  setNotifications((p) => ({ ...p, emailNewCourse: v }))
-                }
-              />
-            </div>
-
-            <div className="border-t border-gray-50" />
-
-            {/* Toggle 2 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-700">
-                  Nhắc nhở tiến độ học
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Nhận thông báo hàng tuần về tiến độ học tập của bạn
-                </p>
-              </div>
-              <ToggleSwitch
-                id="toggle-progress-reminder"
-                checked={notifications.progressReminder}
-                onChange={(v) =>
-                  setNotifications((p) => ({ ...p, progressReminder: v }))
-                }
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={handleSaveNotifications}
-                className="px-6 py-2.5 rounded-xl text-white font-bold text-sm shadow hover:opacity-90 active:scale-95 transition-all duration-200"
-                style={{ background: "#DC2626" }}
-              >
-                Lưu thông báo
-              </button>
-            </div>
-          </div>
-        </Section>
-
-        {/* ---- SECTION 3: Ngôn ngữ ---- */}
-        <Section icon={Globe} title="Ngôn ngữ">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
-                Ngôn ngữ hiển thị
-              </label>
-              <div className="relative">
-                <select
-                  id="select-language"
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full px-4 py-2.5 pr-10 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 appearance-none bg-white transition-all"
-                >
-                  <option value="vi">🇻🇳 Tiếng Việt</option>
-                  <option value="en">🇬🇧 English</option>
-                </select>
-                <ChevronDown
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                  style={{ width: 16, height: 16 }}
+        {/* Hai cột trên màn rộng: đổi mật khẩu bên trái, tùy chọn bên phải. Xếp
+            dọc hết như trước thì nửa màn hình bên phải bỏ trống, trang lại dài. */}
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          {/* ---- SECTION 1: Đổi mật khẩu ---- */}
+          <Section icon={Lock} title="Đổi mật khẩu">
+            <form onSubmit={handleSavePassword} className="space-y-4">
+              {[
+                [
+                  "current",
+                  "Mật khẩu hiện tại",
+                  "••••••••",
+                  "current-password",
+                ],
+                ["newPass", "Mật khẩu mới", "Ít nhất 8 ký tự", "new-password"],
+                [
+                  "confirm",
+                  "Xác nhận mật khẩu mới",
+                  "Nhập lại mật khẩu mới",
+                  "new-password",
+                ],
+              ].map(([field, label, placeholder, autoComplete]) => (
+                <PasswordInput
+                  key={field}
+                  label={label}
+                  placeholder={placeholder}
+                  autoComplete={autoComplete}
+                  value={passwords[field]}
+                  onChange={(v) => setPasswords((p) => ({ ...p, [field]: v }))}
+                  show={showPasswords[field]}
+                  onToggle={() => toggleShow(field)}
                 />
+              ))}
+
+              <DanhSachDieuKien matKhau={passwords.newPass} />
+
+              <p className="text-xs text-gray-400">
+                Đổi xong, các thiết bị khác đang đăng nhập sẽ bị đăng xuất.
+              </p>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={dangDoiMatKhau}
+                  className="px-6 py-2.5 rounded-xl text-white font-bold text-sm shadow hover:opacity-90 active:scale-95 transition-all duration-200 disabled:opacity-60"
+                  style={{ background: "#DC2626" }}
+                >
+                  {dangDoiMatKhau ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
+                </button>
               </div>
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={handleSaveLanguage}
-                className="px-6 py-2.5 rounded-xl text-white font-bold text-sm shadow hover:opacity-90 active:scale-95 transition-all duration-200"
-                style={{ background: "#DC2626" }}
-              >
-                Lưu ngôn ngữ
-              </button>
-            </div>
+            </form>
+          </Section>
+
+          <div className="space-y-6">
+            {/* ---- SECTION 2: Thông báo ---- */}
+            <Section icon={Bell} title="Cài đặt thông báo">
+              <div className="space-y-5">
+                {/* Toggle 1 */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">
+                      Email thông báo khóa học mới
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Nhận email khi có khóa học mới phù hợp với bạn
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    id="toggle-email-new-course"
+                    checked={notifications.emailNewCourse}
+                    onChange={(v) =>
+                      setNotifications((p) => ({ ...p, emailNewCourse: v }))
+                    }
+                  />
+                </div>
+
+                <div className="border-t border-gray-50" />
+
+                {/* Toggle 2 */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">
+                      Nhắc nhở tiến độ học
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Nhận thông báo hàng tuần về tiến độ học tập của bạn
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    id="toggle-progress-reminder"
+                    checked={notifications.progressReminder}
+                    onChange={(v) =>
+                      setNotifications((p) => ({ ...p, progressReminder: v }))
+                    }
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveNotifications}
+                    className="px-6 py-2.5 rounded-xl text-white font-bold text-sm shadow hover:opacity-90 active:scale-95 transition-all duration-200"
+                    style={{ background: "#DC2626" }}
+                  >
+                    Lưu thông báo
+                  </button>
+                </div>
+              </div>
+            </Section>
+
+            {/* ---- SECTION 3: Ngôn ngữ ---- */}
+            <Section icon={Globe} title="Ngôn ngữ">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
+                    Ngôn ngữ hiển thị
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="select-language"
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className="w-full px-4 py-2.5 pr-10 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 appearance-none bg-white transition-all"
+                    >
+                      <option value="vi">🇻🇳 Tiếng Việt</option>
+                      <option value="en">🇬🇧 English</option>
+                    </select>
+                    <ChevronDown
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                      style={{ width: 16, height: 16 }}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveLanguage}
+                    className="px-6 py-2.5 rounded-xl text-white font-bold text-sm shadow hover:opacity-90 active:scale-95 transition-all duration-200"
+                    style={{ background: "#DC2626" }}
+                  >
+                    Lưu ngôn ngữ
+                  </button>
+                </div>
+              </div>
+            </Section>
           </div>
-        </Section>
+        </div>
       </motion.div>
     </>
   );

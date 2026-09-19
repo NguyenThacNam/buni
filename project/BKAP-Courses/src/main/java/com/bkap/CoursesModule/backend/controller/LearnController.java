@@ -34,6 +34,7 @@ import com.bkap.CoursesModule.backend.service.LmsCatalogService;
 import com.bkap.CoursesModule.backend.service.LmsTienDoService;
 import com.bkap.CoursesModule.backend.service.LmsTienDoService.TrangThaiMuc;
 import com.bkap.CoursesModule.backend.service.LmsContentService;
+import com.bkap.CoursesModule.backend.service.LmsDiemDanhService;
 import com.bkap.CoursesModule.backend.service.LmsSsoService;
 import com.bkap.config.JwtUtil;
 import com.bkap.config.MoodleConfig;
@@ -64,6 +65,9 @@ public class LearnController {
 
 	@Autowired
 	private LmsTienDoService lmsTienDoService;
+
+	@Autowired
+	private LmsDiemDanhService lmsDiemDanhService;
 
 
 	@Autowired
@@ -252,6 +256,81 @@ public class LearnController {
 					muc.put("diem", diem.get(cmid));
 				}
 			}
+		}
+	}
+
+	// ─────────────────────────────────────────────────────────────
+	// ĐIỂM DANH
+	// ─────────────────────────────────────────────────────────────
+
+	/**
+	 * Bảng điểm danh của CHÍNH người đang đăng nhập trong một hoạt động điểm danh.
+	 *
+	 * Người học chỉ gửi mã khóa và mã hoạt động; mã người học lấy từ phiên đăng
+	 * nhập, không nhận từ trình duyệt — nếu không thì đổi một con số là xem được
+	 * điểm danh của bạn cùng lớp.
+	 */
+	@GetMapping("/{courseId}/attendance/{cmid}")
+	public ResponseEntity<?> diemDanh(@PathVariable int courseId, @PathVariable int cmid,
+			Authentication authentication) {
+		try {
+			if (!coQuyenHoc(authentication, courseId)) {
+				return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
+			}
+			JsonNode hoatDong = lmsContentService.timHoatDong(courseId, cmid);
+			if (hoatDong == null || !"attendance".equals(hoatDong.path("modname").asText())) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy mục điểm danh này trong khóa"));
+			}
+			Integer idNguoiHoc = lmsSsoService.idTaiKhoanLms(authentication.getName());
+			if (idNguoiHoc == null) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy tài khoản của bạn trên LMS"));
+			}
+			return ResponseEntity.ok(lmsDiemDanhService.cuaHocVien(hoatDong.path("instance").asInt(), idNguoiHoc));
+		} catch (IllegalStateException e) {
+			System.err.println("[Learn] Điểm danh khóa " + courseId + ", cmid " + cmid + ": " + e.getMessage());
+			return ResponseEntity.status(502)
+					.body(Map.of("error", "Chưa lấy được dữ liệu điểm danh từ LMS. Vui lòng thử lại sau."));
+		} catch (Exception e) {
+			System.err.println("[Learn] Điểm danh khóa " + courseId + ": " + e.getMessage());
+			return ResponseEntity.status(502)
+					.body(Map.of("error", "Chưa lấy được dữ liệu điểm danh từ LMS. Vui lòng thử lại sau."));
+		}
+	}
+
+	/**
+	 * Học viên tự điểm danh một buổi. Mã học viên lấy từ phiên đăng nhập; ghi lên
+	 * LMS bằng token của chính học viên.
+	 */
+	@PostMapping("/{courseId}/attendance/{cmid}/sessions/{sessionId}/mark")
+	public ResponseEntity<?> tuDiemDanh(@PathVariable int courseId, @PathVariable int cmid,
+			@PathVariable int sessionId, @RequestHeader(value = "Authorization", required = false) String auth,
+			Authentication authentication) {
+		String jwt = auth != null && auth.startsWith("Bearer ") ? auth.substring(7) : null;
+		String tokenHv = jwt == null ? null : jwtUtil.docTokenLms(jwt);
+		if (tokenHv == null) {
+			return ResponseEntity.status(403).body(Map.of("error",
+					"Vui lòng đăng xuất rồi đăng nhập lại để điểm danh.", "ma", "CAN_DANG_NHAP_LAI"));
+		}
+		try {
+			if (!coQuyenHoc(authentication, courseId)) {
+				return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
+			}
+			JsonNode hoatDong = lmsContentService.timHoatDong(courseId, cmid);
+			if (hoatDong == null || !"attendance".equals(hoatDong.path("modname").asText())) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy mục điểm danh này trong khóa"));
+			}
+			Integer idNguoiHoc = lmsSsoService.idTaiKhoanLms(authentication.getName());
+			if (idNguoiHoc == null) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy tài khoản của bạn trên LMS"));
+			}
+			return ResponseEntity.ok(lmsDiemDanhService.tuDiemDanh(tokenHv, hoatDong.path("instance").asInt(),
+					sessionId, idNguoiHoc));
+		} catch (LmsDiemDanhService.LoiDiemDanh e) {
+			return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
+		} catch (Exception e) {
+			System.err.println("[Learn] Tự điểm danh khóa " + courseId + ": " + e.getMessage());
+			return ResponseEntity.status(502)
+					.body(Map.of("error", "Chưa ghi được điểm danh. Vui lòng thử lại sau."));
 		}
 	}
 

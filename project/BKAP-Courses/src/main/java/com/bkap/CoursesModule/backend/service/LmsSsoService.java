@@ -33,7 +33,7 @@ public class LmsSsoService {
 
 	/** Các loại hoạt động cho phép mở, để cmid không bị lái sang trang quản trị. */
 	private static final Set<String> LOAI_HOP_LE = Set.of("quiz", "forum", "assign", "resource", "page", "url", "book",
-			"lesson", "feedback", "choice", "workshop", "scorm", "glossary", "wiki", "folder");
+			"lesson", "feedback", "choice", "workshop", "scorm", "glossary", "wiki", "folder", "attendance");
 
 	@Autowired
 	private IMoodleService moodleService;
@@ -79,6 +79,27 @@ public class LmsSsoService {
 	/** Đường dẫn đăng nhập một lần, dẫn tới trang chính của khóa bên LMS. */
 	public String duongDanVaoKhoa(String username, int moodleCourseId) throws Exception {
 		return veDangNhap(username, moodleCourseId, moodleSiteUrl + "/course/view.php?id=" + moodleCourseId);
+	}
+
+	/**
+	 * Đường dẫn đăng nhập một lần, dẫn tới một trang bất kỳ TRÊN CHÍNH LMS.
+	 *
+	 * Dùng cho thông báo: Moodle kèm sẵn link tới chỗ liên quan (bài viết diễn
+	 * đàn, bài kiểm tra...), buni không đoán được trước là trang nào.
+	 *
+	 * Chỉ nhận đường dẫn bắt đầu bằng địa chỉ LMS. Thiếu phép kiểm này thì ai đó
+	 * sửa request là biến buni thành bàn đạp chuyển hướng sang trang lừa đảo, mà
+	 * người dùng vẫn thấy link xuất phát từ buni.
+	 */
+	public String duongDanTrenLms(String username, String duongDanLms) throws Exception {
+		if (duongDanLms == null || !duongDanLms.startsWith(moodleSiteUrl)) {
+			throw new IllegalStateException("Đường dẫn không thuộc hệ thống LMS");
+		}
+		String loginUrl = moodleService.getMoodleAutoLoginUrl(username, null);
+		if (loginUrl == null) {
+			throw new IllegalStateException("Chưa lấy được đường dẫn đăng nhập từ hệ thống LMS");
+		}
+		return loginUrl + "&wantsurl=" + URLEncoder.encode(duongDanLms, StandardCharsets.UTF_8);
 	}
 
 	private String veDangNhap(String username, int moodleCourseId, String dichDen) throws Exception {
