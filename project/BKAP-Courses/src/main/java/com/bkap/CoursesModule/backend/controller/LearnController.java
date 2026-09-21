@@ -35,6 +35,7 @@ import com.bkap.CoursesModule.backend.service.LmsTienDoService;
 import com.bkap.CoursesModule.backend.service.LmsTienDoService.TrangThaiMuc;
 import com.bkap.CoursesModule.backend.service.LmsContentService;
 import com.bkap.CoursesModule.backend.service.LmsDiemDanhService;
+import com.bkap.CoursesModule.backend.service.LmsDienDanService;
 import com.bkap.CoursesModule.backend.service.LmsSsoService;
 import com.bkap.config.JwtUtil;
 import com.bkap.config.MoodleConfig;
@@ -68,6 +69,9 @@ public class LearnController {
 
 	@Autowired
 	private LmsDiemDanhService lmsDiemDanhService;
+
+	@Autowired
+	private LmsDienDanService lmsDienDanService;
 
 
 	@Autowired
@@ -255,6 +259,72 @@ public class LearnController {
 				if (diem.containsKey(cmid)) {
 					muc.put("diem", diem.get(cmid));
 				}
+			}
+		}
+	}
+
+	// ─────────────────────────────────────────────────────────────
+	// DIỄN ĐÀN
+	// ─────────────────────────────────────────────────────────────
+
+	/** Các bài đăng của một diễn đàn trong khóa (thường là "Các thông báo"). */
+	@GetMapping("/{courseId}/forum/{cmid}")
+	public ResponseEntity<?> dienDan(@PathVariable int courseId, @PathVariable int cmid,
+			@RequestHeader(value = "Authorization", required = false) String auth, Authentication authentication) {
+		return doDienDan(courseId, auth, authentication, tokenHv -> {
+			List<Map<String, Object>> ds = lmsDienDanService.baiDang(tokenHv, courseId, cmid);
+			if (ds == null) {
+				return ResponseEntity.status(404).body(Map.of("error", "Không tìm thấy diễn đàn này trong khóa"));
+			}
+			kyLinkTrongNoiDung(ds);
+			return ResponseEntity.ok(Map.of("baiDang", ds));
+		});
+	}
+
+	/** Bài mở đầu và các trả lời của một chủ đề. */
+	@GetMapping("/{courseId}/forum/{cmid}/discussions/{discussionId}")
+	public ResponseEntity<?> baiVaTraLoi(@PathVariable int courseId, @PathVariable int cmid,
+			@PathVariable int discussionId, @RequestHeader(value = "Authorization", required = false) String auth,
+			Authentication authentication) {
+		return doDienDan(courseId, auth, authentication, tokenHv -> {
+			List<Map<String, Object>> ds = lmsDienDanService.traLoi(tokenHv, discussionId);
+			kyLinkTrongNoiDung(ds);
+			return ResponseEntity.ok(Map.of("bai", ds));
+		});
+	}
+
+	private interface ViecDienDan {
+		ResponseEntity<?> lam(String tokenHocVien) throws Exception;
+	}
+
+	private ResponseEntity<?> doDienDan(int courseId, String auth, Authentication authentication, ViecDienDan viec) {
+		String jwt = auth != null && auth.startsWith("Bearer ") ? auth.substring(7) : null;
+		String tokenHv = jwt == null ? null : jwtUtil.docTokenLms(jwt);
+		if (tokenHv == null) {
+			return ResponseEntity.status(403).body(Map.of("error",
+					"Vui lòng đăng xuất rồi đăng nhập lại để xem thông báo của khóa.", "ma", "CAN_DANG_NHAP_LAI"));
+		}
+		try {
+			if (!coQuyenHoc(authentication, courseId)) {
+				return ResponseEntity.status(403).body(Map.of("error", CHUA_GHI_DANH));
+			}
+			return viec.lam(tokenHv);
+		} catch (Exception e) {
+			System.err.println("[Learn] Diễn đàn khóa " + courseId + ": " + e.getMessage());
+			return ResponseEntity.status(502)
+					.body(Map.of("error", "Chưa lấy được nội dung diễn đàn từ hệ thống LMS."));
+		}
+	}
+
+	/**
+	 * Ký lại link file nằm trong nội dung bài đăng — ảnh và tệp đính kèm của Moodle
+	 * đòi token dịch vụ mới tải được, trình duyệt gọi thẳng sẽ ra trang trắng.
+	 */
+	private void kyLinkTrongNoiDung(List<Map<String, Object>> ds) {
+		for (Map<String, Object> m : ds) {
+			Object html = m.get("noiDung");
+			if (html != null) {
+				m.put("noiDung", kyLinkTrongHtml(html.toString()));
 			}
 		}
 	}

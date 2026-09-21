@@ -71,6 +71,7 @@ public class LmsContentService {
 		// Nội dung trang (video, bài đọc) không nằm trong core_course_get_contents,
 		// phải hỏi riêng rồi ghép vào theo coursemodule.
 		Map<Integer, String> noiDungTrang = layNoiDungCacTrang(moodleCourseId);
+		Map<Integer, String> nhungH5p = layNhungH5p(moodleCourseId);
 
 		List<Map<String, Object>> dsChuong = new ArrayList<>();
 		for (JsonNode c : chuong) {
@@ -92,7 +93,7 @@ public class LmsContentService {
 					String lyDo = lamSachLyDo(m.path("availabilityinfo").asText(""));
 					muc = dungMucBiKhoa(m, lyDo.isEmpty() ? lyDoChuong : lyDo);
 				} else {
-					muc = dungMuc(m, noiDungTrang);
+					muc = dungMuc(m, noiDungTrang, nhungH5p);
 				}
 				if (muc != null) {
 					dsMuc.add(muc);
@@ -231,7 +232,8 @@ public class LmsContentService {
 	}
 
 	/** Dựng một mục học từ dữ liệu Moodle, hoặc null nếu không hỗ trợ loại đó. */
-	private Map<String, Object> dungMuc(JsonNode m, Map<Integer, String> noiDungTrang) {
+	private Map<String, Object> dungMuc(JsonNode m, Map<Integer, String> noiDungTrang,
+			Map<Integer, String> nhungH5p) {
 		String loai = m.path("modname").asText("");
 		int cmid = m.path("id").asInt();
 
@@ -271,7 +273,32 @@ public class LmsContentService {
 			// LmsDiemDanhService), không cần đường dẫn sang LMS.
 			muc.put("attendanceId", m.path("instance").asInt());
 		}
-		case "quiz", "forum", "assign" -> {
+		case "scorm", "h5pactivity" -> {
+			// Bài giảng SCORM và bài tương tác H5P do Moodle dựng và tự chấm; buni
+			// không vẽ lại được. Nhúng trình phát của Moodle vào trang học để người
+			// học không phải rời buni (xem KhungLms bên frontend).
+			muc.put("nhungLms", true);
+			// Với SCORM, nhúng THẲNG TRÌNH PHÁT chứ không nhúng trang hoạt động:
+			// trang hoạt động kéo theo cả menu, thanh bên, chân trang của Moodle,
+			// nhìn như lồng nguyên website vào giữa bài học. scoid=0 nghĩa là để
+			// Moodle tự mở mục đầu tiên của gói.
+			muc.put("nhungUrl", "scorm".equals(loai)
+					? moodleSiteUrl + "/mod/scorm/player.php?a=" + m.path("instance").asInt()
+							// display=popup: Moodle dựng trang theo bố cục "nhúng" — bỏ menu,
+							// thanh bên, chân trang và thanh chuyển bài. Không có nó thì khung
+							// hiện nguyên giao diện Moodle (150 KB so với 20 KB).
+							+ "&currentorg=&scoid=0&mode=normal&display=popup"
+					// H5P: trình phát riêng của Moodle, chỉ có bài tương tác. Chưa lấy được
+					// đường dẫn gói thì lùi về trang hoạt động (vẫn xem được, chỉ kèm menu).
+					: nhungH5p.getOrDefault(cmid, moodleSiteUrl + "/mod/h5pactivity/view.php?id=" + cmid));
+			muc.put("moodleUrl", moodleSiteUrl + "/mod/" + loai + "/view.php?id=" + cmid);
+		}
+		case "forum" -> {
+			// Diễn đàn (chủ yếu là "Các thông báo"): buni hiện bài đăng ngay tại chỗ,
+			// xem LmsDienDanService. Vẫn giữ đường dẫn LMS để trả lời bài.
+			muc.put("moodleUrl", moodleSiteUrl + "/mod/forum/view.php?id=" + cmid);
+		}
+		case "quiz", "assign" -> {
 			// Mấy loại này để Moodle lo. buni chỉ đưa đường dẫn để mở sang đó.
 			muc.put("moodleUrl", moodleSiteUrl + "/mod/" + loai + "/view.php?id=" + cmid);
 		}
@@ -315,6 +342,37 @@ public class LmsContentService {
 			System.err.println("[LmsContent] Không đối chiếu được cmid: " + e.getMessage());
 		}
 		return null;
+	}
+
+	/**
+	 * Đường dẫn trình phát H5P cho từng hoạt động: cmid -> /h5p/embed.php?url=...
+	 *
+	 * Trình phát này chỉ có đúng bài tương tác, không kèm menu hay thanh bên của
+	 * Moodle. Đường dẫn gói bài do Moodle trả về ở dạng "webservice/pluginfile.php"
+	 * (đòi token dịch vụ); trình phát chạy bằng phiên đăng nhập của học viên nên
+	 * phải đổi sang "pluginfile.php" thường.
+	 */
+	private Map<Integer, String> layNhungH5p(int moodleCourseId) {
+		Map<Integer, String> ket = new LinkedHashMap<>();
+		try {
+			JsonNode r = goiMoodle("mod_h5pactivity_get_h5pactivities_by_courses",
+					"&courseids[0]=" + moodleCourseId);
+			for (JsonNode h : r.path("h5pactivities")) {
+				String goi = h.path("package").path(0).path("fileurl").asText("");
+				if (goi.isBlank()) {
+					continue;
+				}
+				goi = goi.replace("/webservice/pluginfile.php", "/pluginfile.php");
+				ket.put(h.path("coursemodule").asInt(), moodleSiteUrl + "/h5p/embed.php?url="
+						+ java.net.URLEncoder.encode(goi, java.nio.charset.StandardCharsets.UTF_8)
+						+ "&component=mod_h5pactivity");
+			}
+		} catch (Exception e) {
+			// Thiếu hàm hoặc thiếu quyền mod/h5pactivity:view thì thôi, mục H5P vẫn mở
+			// được bằng trang hoạt động của Moodle.
+			System.err.println("[LmsContent] Không lấy được gói H5P: " + e.getMessage());
+		}
+		return ket;
 	}
 
 	/** Gọi mod_page_get_pages_by_courses, trả về map coursemodule -> nội dung HTML. */

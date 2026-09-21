@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ClipboardList, Clock, ExternalLink, RotateCcw, Trophy } from "lucide-react";
+import { AlertCircle, ClipboardList, Clock, RotateCcw, Trophy } from "lucide-react";
 
 import { api } from "../../api/Api";
 
 /**
  * Thẻ giới thiệu một bài kiểm tra, nằm ngay trong trang học.
  *
- * Trước đây bấm vào bài kiểm tra là mở sang LMS. Giờ làm bài và xem kết quả
- * ngay trên buni; điểm vẫn do LMS chấm. Nút "Mở trên LMS" vẫn giữ làm đường lui
- * — cho bài có dạng câu hỏi buni chưa hỗ trợ, hoặc khi có trục trặc.
+ * Làm bài và xem kết quả ngay trên buni; điểm vẫn do LMS chấm.
+ *
+ * Không còn đường lui sang LMS (bỏ 21/09/2026): trung tâm chốt học viên chỉ ở
+ * trên buni. Bài nào có dạng câu hỏi buni chưa hỗ trợ thì trang làm bài báo rõ
+ * để học viên liên hệ giáo viên.
  */
 
 const doiPhut = (giay) => (giay > 0 ? `${Math.round(giay / 60)} phút` : "Không giới hạn");
@@ -19,7 +21,7 @@ const doiDiem = (d) => (d === null || d === undefined ? "—" : Number(d).toFixe
 const doiNgayGio = (giay) =>
   giay ? new Date(giay * 1000).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "";
 
-export default function QuizGioiThieu({ courseId, muc, onMoTrenLms, dangMoLms }) {
+export default function QuizGioiThieu({ courseId, muc }) {
   const navigate = useNavigate();
   const [bai, setBai] = useState(null);
   const [dangTai, setDangTai] = useState(true);
@@ -60,18 +62,6 @@ export default function QuizGioiThieu({ courseId, muc, onMoTrenLms, dangMoLms })
     return <div className="h-40 animate-pulse rounded-xl bg-gray-100" />;
   }
 
-  const duongLui = (
-    <button
-      type="button"
-      onClick={onMoTrenLms}
-      disabled={dangMoLms}
-      className="inline-flex items-center gap-1.5 text-xs text-gray-400 underline-offset-2 hover:text-primary hover:underline disabled:opacity-60"
-    >
-      {dangMoLms ? "Đang mở..." : "Làm trên hệ thống LMS"}
-      <ExternalLink className="h-3.5 w-3.5" />
-    </button>
-  );
-
   if (loi && !bai) {
     return (
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
@@ -90,7 +80,6 @@ export default function QuizGioiThieu({ courseId, muc, onMoTrenLms, dangMoLms })
             Thử lại
           </button>
         )}
-        <div className="mt-4">{duongLui}</div>
       </div>
     );
   }
@@ -201,8 +190,6 @@ export default function QuizGioiThieu({ courseId, muc, onMoTrenLms, dangMoLms })
           </ul>
         </div>
       )}
-
-      <div className="text-center">{duongLui}</div>
     </div>
   );
 }

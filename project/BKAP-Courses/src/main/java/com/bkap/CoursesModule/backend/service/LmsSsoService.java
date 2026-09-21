@@ -33,7 +33,8 @@ public class LmsSsoService {
 
 	/** Các loại hoạt động cho phép mở, để cmid không bị lái sang trang quản trị. */
 	private static final Set<String> LOAI_HOP_LE = Set.of("quiz", "forum", "assign", "resource", "page", "url", "book",
-			"lesson", "feedback", "choice", "workshop", "scorm", "glossary", "wiki", "folder", "attendance");
+			"lesson", "feedback", "choice", "workshop", "scorm", "glossary", "wiki", "folder", "attendance",
+			"h5pactivity");
 
 	@Autowired
 	private IMoodleService moodleService;
@@ -110,10 +111,16 @@ public class LmsSsoService {
 			throw new IllegalStateException("Không tìm thấy tài khoản trên hệ thống LMS");
 		}
 
-		// Ghi danh lại cho chắc. Bình thường trung tâm đã ghi danh sẵn bên LMS; gọi
-		// ở đây là lưới an toàn cho trường hợp sót, để người học không kẹt ở màn
-		// hình "Bạn không thể tự ghi danh". Đã ghi danh rồi thì Moodle bỏ qua.
-		ghiDanhBenLms(moodleUserId, moodleCourseId);
+		// Lưới an toàn: người học chưa được ghi danh thì ghi danh, để khỏi kẹt ở màn
+		// hình "Bạn không thể tự ghi danh".
+		//
+		// PHẢI hỏi trước, chỉ ghi danh khi còn thiếu. Trước đây gọi ghi danh mọi lần
+		// với niềm tin "đã ghi danh rồi thì Moodle bỏ qua" — sai: Moodle vẫn gửi lại
+		// thư "Chào mừng bạn đến với khóa..." mỗi lần, nên mỗi lần học viên mở bài
+		// SCORM/H5P là chuông lại thêm một thông báo chào mừng (21/09/2026).
+		if (!daGhiDanh(username, moodleCourseId)) {
+			ghiDanhBenLms(moodleUserId, moodleCourseId);
+		}
 
 		String loginUrl = moodleService.getMoodleAutoLoginUrl(username, null);
 		if (loginUrl == null) {

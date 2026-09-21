@@ -251,8 +251,8 @@ export default function QuizLamBaiPage() {
         <div className="space-y-4">
           {coCauKhongHoTro && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              Bài này có dạng câu hỏi buni chưa hiển thị được. Vui lòng quay lại trang học và chọn
-              "Làm trên hệ thống LMS".
+              Bài này có dạng câu hỏi buni chưa hiển thị được. Vui lòng báo giáo viên để được
+              hỗ trợ.
             </div>
           )}
 

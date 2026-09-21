@@ -60,8 +60,15 @@ public class LmsThongBaoService {
 
 		List<Map<String, Object>> ds = new ArrayList<>();
 		int chuaDoc = 0;
+		// Thông báo trùng hệt nhau (cùng loại, cùng tiêu đề) chỉ hiện một lần, bản mới
+		// nhất. Chủ yếu là thư "Chào mừng bạn đến với khóa..." bị gửi lặp do lỗi cũ
+		// của buni (xem LmsSsoService.veDangNhap) — đã sửa, nhưng thư cũ vẫn nằm đó.
+		java.util.Set<String> daGap = new java.util.HashSet<>();
 		for (JsonNode n : r.path("notifications")) {
 			if (BO_QUA.contains(n.path("eventtype").asText(""))) {
+				continue;
+			}
+			if (!daGap.add(n.path("eventtype").asText("") + "|" + n.path("subject").asText(""))) {
 				continue;
 			}
 			if (!n.path("read").asBoolean(false)) {
@@ -74,6 +81,8 @@ public class LmsThongBaoService {
 			t.put("id", n.path("id").asInt());
 			t.put("tieuDe", chuThuan(n.path("subject").asText("")));
 			t.put("tomTat", chuThuan(n.path("smallmessage").asText("")));
+			// Nội dung đầy đủ để mở ngay trong chuông, khỏi phải sang LMS mới đọc được.
+			t.put("noiDung", chuThuan(n.path("fullmessage").asText("")));
 			t.put("thoiGian", n.path("timecreated").asLong());
 			t.put("daDoc", n.path("read").asBoolean(false));
 			// Đường dẫn tới chỗ liên quan bên LMS (bài kiểm tra, bài viết diễn đàn...).

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CalendarCheck, ExternalLink, Hand } from "lucide-react";
+import { AlertCircle, CalendarCheck, Hand, QrCode } from "lucide-react";
 
 import { api } from "../../api/Api";
 
@@ -9,10 +9,12 @@ import { api } from "../../api/Api";
  * Giáo viên điểm danh trên LMS; buni hiện lại để học viên tự theo dõi buổi nào
  * có mặt, vắng, muộn và tỷ lệ chuyên cần.
  *
- * Buổi giáo viên cho học viên tự điểm danh, đang trong giờ, thì có nút:
- *  - Buổi KHÔNG kèm mã QR: bấm "Điểm danh" là ghi ngay trên buni.
- *  - Buổi kèm mã QR: nút mở trang điểm danh bên LMS (đăng nhập sẵn) để học viên
- *    nhập mật khẩu / quét mã — buni không kiểm được mật khẩu nên không ghi hộ.
+ * Buổi giáo viên cho học viên tự điểm danh, đang trong giờ và KHÔNG kèm mã QR
+ * thì có nút "Điểm danh", bấm là ghi ngay trên buni.
+ *
+ * Buổi kèm mã QR thì buni chỉ báo "quét mã QR trên lớp": mã QR do giáo viên
+ * chiếu, học viên quét bằng điện thoại. buni không kiểm được mật khẩu nên không
+ * ghi hộ, và cũng không đưa link sang LMS (chốt 21/09/2026).
  */
 
 const THU = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
@@ -94,42 +96,16 @@ export default function BangDiemDanh({ courseId, cmid }) {
     }
   };
 
-  /** Buổi cần mã QR: mở trang điểm danh bên LMS, đã đăng nhập sẵn. */
-  const moTrenLms = async () => {
-    setThongBao(null);
-    // Mở tab trước khi gọi mạng, không thì trình duyệt chặn cửa sổ bật lên.
-    const tab = window.open("", "_blank");
-    try {
-      const res = await api("post", "/learn/lms-url", {
-        courseId: String(courseId),
-        cmid: String(cmid),
-        loai: "attendance",
-      });
-      if (tab) tab.location.href = res.data.loginUrl;
-      else window.location.href = res.data.loginUrl;
-    } catch (err) {
-      if (tab) tab.close();
-      setThongBao({
-        loai: "loi",
-        chu:
-          err?.response?.data?.error ||
-          "Chưa mở được trang điểm danh trên LMS.",
-      });
-    }
-  };
-
   const nutDiemDanh = (b, lon = false) => {
     if (!b.coTheDiemDanh) return null;
     const co = lon ? "px-5 py-2.5 text-sm" : "px-3 py-1 text-xs";
     return b.canQr ? (
-      <button
-        type="button"
-        onClick={moTrenLms}
-        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-primary font-semibold text-primary hover:bg-primary/5 ${co}`}
+      <span
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-gray-100 font-semibold text-gray-500 ${co}`}
       >
-        Điểm danh trên LMS
-        <ExternalLink className="h-3.5 w-3.5" />
-      </button>
+        <QrCode className="h-3.5 w-3.5" />
+        Quét mã QR trên lớp
+      </span>
     ) : (
       <button
         type="button"
@@ -208,7 +184,7 @@ export default function BangDiemDanh({ courseId, cmid }) {
             </p>
             {b.canQr && (
               <p className="mt-0.5 text-xs text-gray-500">
-                Buổi này cần mật khẩu hoặc mã QR giáo viên đưa ra trên lớp.
+                Buổi này điểm danh bằng mã QR: quét mã giáo viên chiếu trên lớp.
               </p>
             )}
           </div>

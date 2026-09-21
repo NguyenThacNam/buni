@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, ExternalLink } from "lucide-react";
+import { Bell } from "lucide-react";
 
 import { api } from "../../api/Api";
 
@@ -12,6 +12,10 @@ import { api } from "../../api/Api";
  *
  * Bỏ qua loại "đăng nhập mới" ở phía máy chủ (xem LmsThongBaoService): chính
  * buni sinh ra nó mỗi lần học viên đăng nhập.
+ *
+ * Bấm một thông báo thì MỞ NGAY TRONG CHUÔNG. Trung tâm chốt học viên chỉ học
+ * trên buni, không đẩy sang LMS, nên ở đây không còn link "Mở trên LMS" (bỏ
+ * 21/09/2026) — nội dung thông báo vốn chỉ là mấy dòng chữ, đọc tại chỗ là đủ.
  */
 
 const SO_LUONG = 10;
@@ -35,6 +39,7 @@ export default function ChuongThongBao() {
   const [ds, setDs] = useState([]);
   const [dangTai, setDangTai] = useState(false);
   const [loi, setLoi] = useState(null);
+  const [dangXem, setDangXem] = useState(null); // id thông báo đang mở rộng
   const khungRef = useRef(null);
 
   const tai = useCallback(async () => {
@@ -85,22 +90,18 @@ export default function ChuongThongBao() {
     if (sapMo) tai();
   };
 
+  /** Bấm vào một dòng: mở/đóng nội dung ngay tại chỗ và đánh dấu đã đọc. */
   const bamThongBao = async (tb) => {
-    // Mở tab trước khi gọi mạng, không thì trình duyệt chặn cửa sổ bật lên.
-    const tab = tb.duongDanLms ? window.open("", "_blank") : null;
+    setDangXem((cu) => (cu === tb.id ? null : tb.id));
+    if (tb.daDoc) return;
+
     setDs((cu) => cu.map((x) => (x.id === tb.id ? { ...x, daDoc: true } : x)));
     try {
-      const res = await api(
-        "post",
-        `/notifications/${tb.id}/open?duongDanLms=${encodeURIComponent(tb.duongDanLms || "")}`,
-      );
+      // Không gửi kèm đường dẫn: chỉ cần đánh dấu đã đọc, không mở gì cả.
+      const res = await api("post", `/notifications/${tb.id}/open`);
       setChuaDoc(res.data.chuaDoc || 0);
-      if (tab) {
-        if (res.data.loginUrl) tab.location.href = res.data.loginUrl;
-        else tab.close();
-      }
     } catch {
-      if (tab) tab.close();
+      // Đánh dấu hỏng thì thôi, lần mở chuông sau sẽ đúng lại.
     }
   };
 
@@ -169,10 +170,20 @@ export default function ChuongThongBao() {
                             {tb.tomTat}
                           </span>
                         )}
-                        <span className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
+                        <span className="mt-1 block text-xs text-gray-400">
                           {doiThoiGian(tb.thoiGian)}
-                          {tb.duongDanLms && <ExternalLink className="h-3 w-3" />}
                         </span>
+
+                        {/* Nội dung đầy đủ, mở ngay tại chỗ khi bấm. */}
+                        {dangXem === tb.id && (
+                          <span className="mt-2 block border-t border-gray-100 pt-2">
+                            {tb.noiDung && (
+                              <span className="block whitespace-pre-line text-xs leading-relaxed text-gray-600">
+                                {tb.noiDung}
+                              </span>
+                            )}
+                          </span>
+                        )}
                       </span>
                     </button>
                   </li>

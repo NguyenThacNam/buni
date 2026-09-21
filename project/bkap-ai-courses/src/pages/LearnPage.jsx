@@ -21,7 +21,9 @@ import { useAuth } from "../context/AuthContext";
 import QuizGioiThieu from "../components/quiz/QuizGioiThieu";
 import XemPdf from "../components/learn/XemPdf";
 import BangDiemDanh from "../components/learn/BangDiemDanh";
-import { API_BASE_URL, CONTACT_INFO, LMS_URL } from "../data/constants";
+import BangTinKhoa from "../components/learn/BangTinKhoa";
+import KhungLms from "../components/learn/KhungLms";
+import { API_BASE_URL, CONTACT_INFO } from "../data/constants";
 
 /**
  * Trang học trên buni.
@@ -29,9 +31,12 @@ import { API_BASE_URL, CONTACT_INFO, LMS_URL } from "../data/constants";
  * Nội dung lấy từ LMS qua backend chứ không gọi thẳng Moodle — token dịch vụ
  * mở được toàn bộ API nên phải giữ ở phía máy chủ.
  *
- * Phân vai giữa hai hệ thống: buni lo phần đọc/xem (PDF, tài liệu, video) và
- * giao diện làm bài kiểm tra; chấm điểm, lưu lượt làm vẫn do Moodle quyết qua
- * API. Diễn đàn, bài nộp... vẫn mở sang LMS.
+ * Phân vai giữa hai hệ thống: buni lo toàn bộ phần học viên nhìn thấy; Moodle
+ * lo chấm điểm, lưu lượt làm, ghi tiến độ qua API.
+ *
+ * Học viên KHÔNG bị đẩy sang LMS (chốt 21/09/2026). Loại nội dung buni chưa dựng
+ * lại được (SCORM, H5P) thì nhúng trình phát của Moodle ngay trong trang; loại
+ * chưa hỗ trợ thì báo để học viên hỏi giáo viên, chứ không đưa link sang LMS.
  */
 
 /**
@@ -89,7 +94,9 @@ const NHAN_LOAI = {
   resource: "Tài liệu",
   page: "Bài học",
   quiz: "Bài kiểm tra",
-  forum: "Diễn đàn",
+  forum: "Bảng tin khóa học",
+  scorm: "Bài giảng tương tác",
+  h5pactivity: "Bài tương tác",
   attendance: "Điểm danh",
   assign: "Bài tập nộp",
 };
@@ -99,8 +106,6 @@ const NHAN_LOAI = {
 // ─────────────────────────────────────────────────────────────
 
 function NoiDungMuc({ muc, courseId, onDanhDau }) {
-  const [dangMoLms, setDangMoLms] = useState(false);
-  const [loiLms, setLoiLms] = useState(null);
   const [dangDanhDau, setDangDanhDau] = useState(false);
   const [loiDanhDau, setLoiDanhDau] = useState(null);
 
@@ -118,40 +123,6 @@ function NoiDungMuc({ muc, courseId, onDanhDau }) {
       setLoiDanhDau(err?.response?.data?.error || "Chưa lưu được. Vui lòng thử lại.");
     } finally {
       setDangDanhDau(false);
-    }
-  };
-
-  /**
-   * Xin đường dẫn đăng nhập một lần rồi mở sang LMS.
-   *
-   * Không dùng thẻ <a> trỏ thẳng sang Moodle nữa: người học chưa có phiên đăng
-   * nhập bên đó sẽ rơi vào màn hình đăng nhập, còn nếu máy đang đăng nhập bằng
-   * tài khoản khác thì bài làm ghi sang tên người khác.
-   */
-  const moTrenLms = async () => {
-    if (!muc) return;
-    setDangMoLms(true);
-    setLoiLms(null);
-
-    // Mở tab TRƯỚC khi gọi mạng. Gọi xong mới mở thì trình duyệt coi đó là
-    // cửa sổ tự bật và chặn, vì đã rời khỏi nhịp bấm chuột của người dùng.
-    const tab = window.open("", "_blank");
-    try {
-      const res = await api("post", "/learn/lms-url", {
-        courseId: String(courseId),
-        cmid: String(muc.cmid),
-        loai: muc.type,
-      });
-      if (tab) tab.location.href = res.data.loginUrl;
-      else window.location.href = res.data.loginUrl;
-    } catch (err) {
-      if (tab) tab.close();
-      setLoiLms(
-        err?.response?.data?.error ||
-          "Chưa mở được nội dung trên LMS. Vui lòng thử lại.",
-      );
-    } finally {
-      setDangMoLms(false);
     }
   };
 
@@ -259,16 +230,12 @@ function NoiDungMuc({ muc, courseId, onDanhDau }) {
           <FileText className="h-10 w-10 shrink-0 text-primary" strokeWidth={1.4} />
           <div className="min-w-0">
             <p className="truncate font-semibold text-gray-900">{muc.filename}</p>
+            {/* Link "Mở trên LMS" đã bỏ (21/09/2026): học viên chỉ học trên buni.
+                Định dạng này trình duyệt không mở sẵn được, nên nhờ giáo viên đăng
+                lại dạng PDF hoặc video. */}
             <p className="mt-0.5 text-sm text-gray-500">
-              Trình duyệt không mở được định dạng này.{" "}
-              <a
-                href={`${LMS_URL}/mod/resource/view.php?id=${muc.cmid}`}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-primary underline"
-              >
-                Mở trên LMS
-              </a>
+              Trình duyệt không mở được định dạng này. Vui lòng báo giáo viên đăng lại
+              dưới dạng PDF hoặc video.
             </p>
           </div>
         </div>
@@ -297,58 +264,32 @@ function NoiDungMuc({ muc, courseId, onDanhDau }) {
         />
       )}
 
-      {/* Kiểm tra, diễn đàn, bài nộp: mở sang LMS. Điểm và lượt làm bài do
-          Moodle quản lý, làm lại ở buni sẽ lệch dữ liệu. */}
       {/* Bài kiểm tra: làm ngay trên buni, điểm do LMS chấm. */}
       {/* Điểm danh: bảng chuyên cần của chính học viên, lấy từ LMS. */}
       {muc.type === "attendance" && <BangDiemDanh courseId={courseId} cmid={muc.cmid} />}
 
-      {muc.type === "quiz" && (
-        <QuizGioiThieu
-          courseId={courseId}
-          muc={muc}
-          onMoTrenLms={moTrenLms}
-          dangMoLms={dangMoLms}
-        />
-      )}
-      {muc.type === "quiz" && loiLms && (
-        <p className="text-center text-sm text-primary">{loiLms}</p>
+      {/* Bảng tin khóa học: đọc bài đăng của giáo viên ngay trên buni. */}
+      {muc.type === "forum" && (
+        <BangTinKhoa courseId={courseId} muc={muc} ganGocVaoHtml={ganGocVaoHtml} />
       )}
 
-      {muc.moodleUrl && muc.type !== "quiz" && (
+      {/* Bài giảng SCORM, bài tương tác H5P: nhúng trình phát của Moodle. */}
+      {muc.nhungLms && <KhungLms courseId={courseId} muc={muc} />}
+
+      {muc.type === "quiz" && <QuizGioiThieu courseId={courseId} muc={muc} />}
+
+      {/* Loại nội dung buni chưa dựng lại được (bài tập nộp, wiki...). Trước đây
+          chỗ này có nút "Mở trên LMS"; đã bỏ (21/09/2026) vì trung tâm chốt học
+          viên chỉ học trên buni. */}
+      {muc.moodleUrl && !["quiz", "forum"].includes(muc.type) && !muc.nhungLms && (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
-          <BieuTuongMuc
-            muc={muc}
-            className="mx-auto mb-3 h-10 w-10 text-primary"
-          />
+          <BieuTuongMuc muc={muc} className="mx-auto mb-3 h-10 w-10 text-primary" />
           <p className="mb-1 font-semibold text-gray-900">
-            {muc.type === "quiz"
-              ? "Bài kiểm tra được thực hiện trên hệ thống LMS"
-              : "Nội dung này nằm trên hệ thống LMS"}
+            Nội dung này chưa hiển thị được trên buni
           </p>
-          <p className="mb-3 text-sm text-gray-500">
-            Bấm mở là vào thẳng bằng chính tài khoản của bạn, không phải
-            đăng nhập lại.
+          <p className="text-sm text-gray-500">
+            Vui lòng liên hệ giáo viên phụ trách lớp để được hướng dẫn.
           </p>
-
-          {/* Điểm lấy từ LMS — khỏi phải sang đó xem mới biết mình được mấy điểm */}
-          {muc.diem && (
-            <p className="mb-5 text-sm">
-              <span className="text-gray-500">Điểm cao nhất của bạn: </span>
-              <span className="font-bold text-primary">{muc.diem}</span>
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={moTrenLms}
-            disabled={dangMoLms}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-wider text-white shadow-md transition-colors hover:bg-primary-dark disabled:opacity-60"
-          >
-            {dangMoLms ? "Đang mở..." : "Mở trên LMS"}
-            <ExternalLink className="h-4 w-4" />
-          </button>
-
-          {loiLms && <p className="mt-3 text-sm text-primary">{loiLms}</p>}
         </div>
       )}
     </div>
